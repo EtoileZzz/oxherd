@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.oxherd.app.theme.LocalOxherdColors
 import com.oxherd.app.ui.motion.FluidMotionTokens
 import com.oxherd.app.ui.motion.LocalMotionScale
 import com.oxherd.app.ui.motion.LocalPerfLevel
@@ -80,6 +81,7 @@ fun CompletionHandoffDialog(
     onConfirmArchive: () -> Unit
 ) {
     val context = LocalContext.current
+    val colors = LocalOxherdColors.current
     val perfLevel = LocalPerfLevel.current
     val motionScale = LocalMotionScale.current
 
@@ -170,8 +172,8 @@ fun CompletionHandoffDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(24.dp))
-                    .border(1.dp, Color(0xFF333B4D), RoundedCornerShape(24.dp)),
-                color = Color(0xFF161922),
+                    .border(1.dp, colors.border, RoundedCornerShape(24.dp)),
+                color = colors.surface,
                 shadowElevation = 16.dp
             ) {
                 Column(
@@ -186,8 +188,8 @@ fun CompletionHandoffDialog(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1E3A2F))
-                            .border(2.dp, Color(0xFF4CAF50).copy(alpha = 0.5f), CircleShape),
+                            .background(colors.successContainer)
+                            .border(2.dp, colors.success.copy(alpha = 0.5f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(text = "🎉", fontSize = 32.sp)
@@ -199,7 +201,7 @@ fun CompletionHandoffDialog(
                         text = if (completedCount >= totalCount && totalCount > 0) "值班巡检全部完成" else "提前交班结算",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = colors.textPrimary
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -207,7 +209,7 @@ fun CompletionHandoffDialog(
                     Text(
                         text = "$stationName · $taskTitle",
                         fontSize = 13.sp,
-                        color = Color(0xFF8E9AAF)
+                        color = colors.textSecondary
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -220,19 +222,19 @@ fun CompletionHandoffDialog(
                         StatCard(
                             title = "完成率",
                             value = "${(uiState.progressPercentage * 100).toInt()}%",
-                            accentColor = Color(0xFF4CAF50),
+                            accentColor = colors.success,
                             modifier = Modifier.weight(1f)
                         )
                         StatCard(
                             title = "打卡条目",
                             value = "$completedCount/$totalCount",
-                            accentColor = Color(0xFF5B8DEF),
+                            accentColor = colors.accent,
                             modifier = Modifier.weight(1f)
                         )
                         StatCard(
                             title = "异常记录",
                             value = "${exceptionItems.size}",
-                            accentColor = if (exceptionItems.isNotEmpty()) Color(0xFFFF9800) else Color(0xFF8E9AAF),
+                            accentColor = if (exceptionItems.isNotEmpty()) colors.warning else colors.textTertiary,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -244,8 +246,8 @@ fun CompletionHandoffDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0F1117))
-                            .border(1.dp, Color(0xFF262C3A), RoundedCornerShape(12.dp))
+                            .background(colors.surfaceVariant)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
                         Row(
@@ -257,12 +259,12 @@ fun CompletionHandoffDialog(
                                 text = "值班日报摘要预览",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFA6B2C8)
+                                color = colors.textPrimary
                             )
                             Text(
                                 text = "已自动生成",
                                 fontSize = 11.sp,
-                                color = Color(0xFF4CAF50)
+                                color = colors.success
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -271,7 +273,7 @@ fun CompletionHandoffDialog(
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = Color(0xFFD6DEEB),
+                            color = colors.textSecondary,
                             maxLines = 8,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -285,8 +287,8 @@ fun CompletionHandoffDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF1B202D))
-                                .border(1.dp, Color(0xFF2E384D), RoundedCornerShape(12.dp))
+                                .background(colors.surfaceVariant)
+                                .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
                                 .padding(12.dp)
                         ) {
                             Row(
@@ -306,13 +308,13 @@ fun CompletionHandoffDialog(
                                         text = "巡查凭证抽屉 (${evidenceItems.size}张)",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = Color.White
+                                        color = colors.textPrimary
                                     )
                                 }
                                 Text(
                                     text = if (isDrawerExpanded) "收起 ▲" else "展开 ▼",
                                     fontSize = 12.sp,
-                                    color = Color(0xFF5B8DEF)
+                                    color = colors.accent
                                 )
                             }
 
@@ -343,19 +345,19 @@ fun CompletionHandoffDialog(
                                             .fillMaxWidth()
                                             .height(36.dp)
                                             .flashButton(
-                                                accentColor = Color(0xFF5B8DEF),
+                                                accentColor = colors.accent,
                                                 cornerRadiusDp = 8.dp
                                             ) {
                                                 shareEvidenceToTim(context, evidenceItems.mapNotNull { it.item.photoUri }, targetApp)
                                             }
-                                            .background(Color(0xFF25334D), RoundedCornerShape(8.dp)),
+                                            .background(colors.accentContainer, RoundedCornerShape(8.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = "一键分享凭证照片至 TIM",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = Color(0xFF8BB5FF)
+                                            color = colors.accentContent
                                         )
                                     }
                                 }
@@ -371,20 +373,20 @@ fun CompletionHandoffDialog(
                             .fillMaxWidth()
                             .height(44.dp)
                             .flashButton(
-                                accentColor = Color(0xFF5B8DEF),
+                                accentColor = colors.accent,
                                 cornerRadiusDp = 10.dp
                             ) {
                                 copyToClipboard(context, "巡检日报摘要", reportSummary)
                             }
-                            .background(Color(0xFF222838), RoundedCornerShape(10.dp))
-                            .border(1.dp, Color(0xFF38435E), RoundedCornerShape(10.dp)),
+                            .background(colors.surfaceVariant, RoundedCornerShape(10.dp))
+                            .border(1.dp, colors.border, RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "📋 复制值班日报摘要",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFB0C4DE)
+                            color = colors.textPrimary
                         )
                     }
 
@@ -396,20 +398,20 @@ fun CompletionHandoffDialog(
                             .fillMaxWidth()
                             .height(44.dp)
                             .flashButton(
-                                accentColor = Color(0xFF1E88E5),
+                                accentColor = colors.accent,
                                 cornerRadiusDp = 10.dp
                             ) {
                                 openFormOrApp(context, handoffUrl, targetApp)
                             }
-                            .background(Color(0xFF192A45), RoundedCornerShape(10.dp))
-                            .border(1.dp, Color(0xFF284C82), RoundedCornerShape(10.dp)),
+                            .background(colors.accentContainer, RoundedCornerShape(10.dp))
+                            .border(1.dp, colors.accent.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (!handoffUrl.isNullOrBlank()) "🔗 打开巡检表单 / TIM" else "🚀 打开腾讯 TIM",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF64B5F6)
+                            color = colors.accentContent
                         )
                     }
 
@@ -421,14 +423,14 @@ fun CompletionHandoffDialog(
                             .fillMaxWidth()
                             .height(48.dp)
                             .flashButton(
-                                accentColor = Color(0xFF4CAF50),
+                                accentColor = colors.success,
                                 cornerRadiusDp = 12.dp,
                                 enabled = !isArchiving
                             ) {
                                 isArchiving = true
                                 onConfirmArchive()
                             }
-                            .background(Color(0xFF2E7D32), RoundedCornerShape(12.dp)),
+                            .background(colors.success, RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isArchiving) {
@@ -462,7 +464,7 @@ fun CompletionHandoffDialog(
                     Text(
                         text = "暂不交班，继续巡查",
                         fontSize = 12.sp,
-                        color = Color(0xFF8E9AAF),
+                        color = colors.textSecondary,
                         modifier = Modifier
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -484,11 +486,12 @@ private fun StatCard(
     accentColor: Color,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOxherdColors.current
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF10121A))
-            .border(1.dp, Color(0xFF242A38), RoundedCornerShape(10.dp))
+            .background(colors.surfaceVariant)
+            .border(1.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
             .padding(vertical = 10.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -502,7 +505,7 @@ private fun StatCard(
         Text(
             text = title,
             fontSize = 11.sp,
-            color = Color(0xFF8E9AAF)
+            color = colors.textSecondary
         )
     }
 }
@@ -513,12 +516,13 @@ private fun EvidenceThumbnailCard(
     photoUri: String?,
     isException: Boolean
 ) {
+    val colors = LocalOxherdColors.current
     Column(
         modifier = Modifier
             .width(90.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF13161F))
-            .border(1.dp, if (isException) Color(0xFFFF5722) else Color(0xFF2E384D), RoundedCornerShape(8.dp))
+            .background(colors.surfaceVariant)
+            .border(1.dp, if (isException) colors.warning else colors.borderSubtle, RoundedCornerShape(8.dp))
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -526,7 +530,7 @@ private fun EvidenceThumbnailCard(
             modifier = Modifier
                 .size(60.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF262C3A)),
+                .background(colors.surfaceElevated),
             contentAlignment = Alignment.Center
         ) {
             Text(text = "📷", fontSize = 24.sp)
@@ -535,7 +539,7 @@ private fun EvidenceThumbnailCard(
         Text(
             text = title,
             fontSize = 10.sp,
-            color = Color(0xFFB0C4DE),
+            color = colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

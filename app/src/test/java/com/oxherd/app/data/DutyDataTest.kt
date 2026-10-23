@@ -75,10 +75,11 @@ class DutyDataTest {
     fun testUserSettingsDefaults() {
         val settings = UserSettings()
         assertEquals(1L, settings.activeStationId)
-        assertEquals("3楼自习区", settings.activeStationName)
+        assertEquals("默认岗位", settings.activeStationName)
         assertEquals(PerfLevel.FULL, settings.perfLevel)
         assertEquals(1.0f, settings.motionScale, 0.001f)
         assertEquals("com.tencent.tim", settings.defaultHandoffApp)
+        assertEquals(ThemeMode.SYSTEM, settings.themeMode)
     }
 
     @Test
@@ -119,5 +120,52 @@ class DutyDataTest {
         assertEquals(901L, customSub.id)
         assertEquals(501L, customSub.parentId)
         assertFalse(customSub.isCompleted)
+    }
+
+    @Test
+    fun testDatabaseConstantsAndThemeModeSupport() {
+        assertEquals(2, OxherdDatabase.DATABASE_VERSION)
+        assertEquals("oxherd.db", OxherdDatabase.DATABASE_NAME)
+        assertEquals("SYSTEM", ThemeMode.SYSTEM)
+        assertEquals("LIGHT", ThemeMode.LIGHT)
+        assertEquals("DARK", ThemeMode.DARK)
+
+        val settings = UserSettings()
+        assertEquals(ThemeMode.SYSTEM, settings.themeMode)
+
+        val darkSettings = settings.copy(themeMode = ThemeMode.DARK)
+        assertEquals("DARK", darkSettings.themeMode)
+
+        val lightSettings = settings.copy(themeMode = ThemeMode.LIGHT)
+        assertEquals("LIGHT", lightSettings.themeMode)
+    }
+
+    @Test
+    fun testCleanSlateDefaultTaskAndStationModel() {
+        val defaultTask = DutyTask(
+            id = 1L,
+            title = "我的值班任务",
+            scheduledDate = "2026-10-23",
+            scheduledTime = "20:00",
+            recurrenceRule = "WEEKLY:4",
+            remindAdvanceMinutes = 15,
+            status = TaskStatus.NOT_STARTED
+        )
+        val defaultStation = TaskStation(
+            id = 1L,
+            taskId = defaultTask.id,
+            name = "默认岗位",
+            sortOrder = 1,
+            isCompleted = false
+        )
+
+        assertEquals("我的值班任务", defaultTask.title)
+        assertEquals(TaskStatus.NOT_STARTED, defaultTask.status)
+        assertEquals("默认岗位", defaultStation.name)
+        assertEquals(1, defaultStation.sortOrder)
+        assertFalse(defaultStation.isCompleted)
+
+        val stationWithItems = StationWithItems(defaultStation, emptyList())
+        assertEquals(0, stationWithItems.items.size)
     }
 }

@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.oxherd.app.theme.OxherdTheme
 import com.oxherd.app.ui.DutyViewModel
 import com.oxherd.app.ui.SettingsScreen
 import com.oxherd.app.ui.TaskDetailScreen
@@ -20,46 +21,47 @@ import com.oxherd.app.ui.motion.LocalPerfLevel
 import com.oxherd.app.ui.motion.PerfLevel
 
 @Composable
-fun MainNavigation() {
-    val context = LocalContext.current
-    val backStack = rememberNavBackStack(TaskDetail)
-
-    val dutyViewModel: DutyViewModel = viewModel(
-        factory = DutyViewModel.factory(context.applicationContext as Application)
+fun MainNavigation(
+    dutyViewModel: DutyViewModel = viewModel(
+        factory = DutyViewModel.factory(LocalContext.current.applicationContext as Application)
     )
+) {
+    val backStack = rememberNavBackStack(TaskDetail)
 
     val uiState by dutyViewModel.uiState.collectAsStateWithLifecycle()
     val activePerfLevel = PerfLevel.fromString(uiState.userSettings.perfLevel)
     val activeMotionScale = uiState.userSettings.motionScale
 
-    CompositionLocalProvider(
-        LocalPerfLevel provides activePerfLevel,
-        LocalMotionScale provides activeMotionScale
-    ) {
-        NavDisplay(
-            backStack = backStack,
-            onBack = { backStack.removeLastOrNull() },
-            modifier = Modifier.fillMaxSize(),
-            entryProvider = entryProvider {
-                entry<TaskDetail> {
-                    TaskDetailScreen(
-                        viewModel = dutyViewModel,
-                        onNavigateToSettings = { backStack.add(Settings) }
-                    )
+    OxherdTheme(themeMode = uiState.userSettings.themeMode) {
+        CompositionLocalProvider(
+            LocalPerfLevel provides activePerfLevel,
+            LocalMotionScale provides activeMotionScale
+        ) {
+            NavDisplay(
+                backStack = backStack,
+                onBack = { backStack.removeLastOrNull() },
+                modifier = Modifier.fillMaxSize(),
+                entryProvider = entryProvider {
+                    entry<TaskDetail> {
+                        TaskDetailScreen(
+                            viewModel = dutyViewModel,
+                            onNavigateToSettings = { backStack.add(Settings) }
+                        )
+                    }
+                    entry<Main> {
+                        TaskDetailScreen(
+                            viewModel = dutyViewModel,
+                            onNavigateToSettings = { backStack.add(Settings) }
+                        )
+                    }
+                    entry<Settings> {
+                        SettingsScreen(
+                            viewModel = dutyViewModel,
+                            onBack = { backStack.removeLastOrNull() }
+                        )
+                    }
                 }
-                entry<Main> {
-                    TaskDetailScreen(
-                        viewModel = dutyViewModel,
-                        onNavigateToSettings = { backStack.add(Settings) }
-                    )
-                }
-                entry<Settings> {
-                    SettingsScreen(
-                        viewModel = dutyViewModel,
-                        onBack = { backStack.removeLastOrNull() }
-                    )
-                }
-            }
-        )
+            )
+        }
     }
 }

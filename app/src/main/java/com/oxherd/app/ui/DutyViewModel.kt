@@ -314,6 +314,12 @@ class DutyViewModel(
         }
     }
 
+    fun updateThemeMode(themeMode: String) {
+        viewModelScope.launch {
+            repository.updateThemeMode(themeMode)
+        }
+    }
+
     fun openCompletionDialog() {
         _showCompletionDialog.value = true
     }

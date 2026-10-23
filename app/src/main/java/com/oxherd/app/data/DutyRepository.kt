@@ -64,6 +64,9 @@ interface DutyRepository {
     /** Updates user settings. */
     suspend fun updateUserSettings(settings: UserSettings)
 
+    /** Updates application theme mode ("SYSTEM", "LIGHT", "DARK"). */
+    suspend fun updateThemeMode(themeMode: String)
+
     /** Schedules pre-shift alarm reminder for a duty task. */
     fun scheduleTaskAlarm(task: DutyTask): Boolean
 
@@ -171,6 +174,9 @@ class DefaultDutyRepository(
 
     override suspend fun updateUserSettings(settings: UserSettings) =
         database.updateUserSettings(settings)
+
+    override suspend fun updateThemeMode(themeMode: String) =
+        database.updateThemeMode(themeMode)
 
     override fun scheduleTaskAlarm(task: DutyTask): Boolean =
         alarmScheduler.schedulePreShiftAlarm(task)

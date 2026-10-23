@@ -109,11 +109,12 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             CREATE TABLE user_settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 active_station_id INTEGER NOT NULL DEFAULT 1,
-                active_station_name TEXT NOT NULL DEFAULT '3楼自习区',
+                active_station_name TEXT NOT NULL DEFAULT '默认岗位',
                 perf_level TEXT NOT NULL DEFAULT 'FULL',
                 motion_scale REAL NOT NULL DEFAULT 1.0,
                 default_handoff_url TEXT NOT NULL DEFAULT '',
-                default_handoff_app TEXT NOT NULL DEFAULT 'com.tencent.tim'
+                default_handoff_app TEXT NOT NULL DEFAULT 'com.tencent.tim',
+                theme_mode TEXT DEFAULT 'SYSTEM'
             )
             """.trimIndent()
         )
@@ -151,9 +152,9 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
     private fun seedInitialData(db: SQLiteDatabase) {
         val todayStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
 
-        // 1. Insert seed task
+        // 1. Clean default task
         val taskValues = ContentValues().apply {
-            put("title", "周四图书馆晚班巡检")
+            put("title", "我的值班任务")
             put("scheduled_date", todayStr)
             put("scheduled_time", "20:00")
             put("recurrence_rule", "WEEKLY:4")
@@ -165,173 +166,30 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
         }
         val taskId = db.insert("duty_tasks", null, taskValues)
 
-        // Station 1: 3楼自习区
-        val s1Values = ContentValues().apply {
+        // 2. Clean default station: exactly 1 station, name = "默认岗位", sort_order = 1, is_completed = 0
+        val stationValues = ContentValues().apply {
             put("task_id", taskId)
-            put("name", "3楼自习区")
+            put("name", "默认岗位")
             put("sort_order", 1)
             put("is_completed", 0)
         }
-        val s1Id = db.insert("task_stations", null, s1Values)
+        val stationId = db.insert("task_stations", null, stationValues)
 
-        // S1 Item 1: Linear 20:00~20:30
-        insertCheckItemWithSubItems(
-            db, s1Id,
-            title = "20:00~20:30 开馆巡查与照明确认",
-            isLinear = true, start = "20:00", end = "20:30", sort = 1,
-            subItems = listOf("检查大厅主灯开闭", "确认301-315自习室电源插座通电", "安全通道无障碍物堆放")
-        )
+        // Exactly 0 rows in check_items!
+        // Exactly 0 rows in sub_items!
 
-        // S1 Item 2: Linear 21:30~22:00
-        insertCheckItemWithSubItems(
-            db, s1Id,
-            title = "21:30~22:00 闭馆清场与门禁落锁",
-            isLinear = true, start = "21:30", end = "22:00", sort = 2,
-            subItems = listOf("提醒读者离馆", "检查门窗关闭锁止", "消防栓铅封完好")
-        )
-
-        // S1 Item 3: Non-linear
-        insertCheckItemWithSubItems(
-            db, s1Id,
-            title = "消防栓与灭火器例行安全检查",
-            isLinear = false, start = null, end = null, sort = 3,
-            subItems = listOf("指针在绿色正常区间", "消火栓箱体无损坏")
-        )
-
-        // S1 Item 4: Non-linear
-        insertCheckItemWithSubItems(
-            db, s1Id,
-            title = "自习区桌椅与借阅机巡查",
-            isLinear = false, start = null, end = null, sort = 4,
-            subItems = listOf("桌椅归位整齐", "自助借还书机网络正常")
-        )
-
-        // Station 2: 4楼阅览室
-        val s2Values = ContentValues().apply {
-            put("task_id", taskId)
-            put("name", "4楼阅览室")
-            put("sort_order", 2)
-            put("is_completed", 0)
-        }
-        val s2Id = db.insert("task_stations", null, s2Values)
-
-        // S2 Item 1: Linear 20:00~20:30
-        insertCheckItemWithSubItems(
-            db, s2Id,
-            title = "20:00~20:30 阅览区环境及空调检查",
-            isLinear = true, start = "20:00", end = "20:30", sort = 1,
-            subItems = listOf("空调温度设定26℃", "阅览座位照明灯正常", "静音指示牌摆放到位")
-        )
-
-        // S2 Item 2: Linear 21:30~22:00
-        insertCheckItemWithSubItems(
-            db, s2Id,
-            title = "21:30~22:00 阅览架位整理与门禁闭馆",
-            isLinear = true, start = "21:30", end = "22:00", sort = 2,
-            subItems = listOf("读者还书架归位", "检查阅览区电源总闸", "关闭东侧西侧防火门")
-        )
-
-        // S2 Item 3: Non-linear
-        insertCheckItemWithSubItems(
-            db, s2Id,
-            title = "微缩胶卷与特种设备检查",
-            isLinear = false, start = null, end = null, sort = 3,
-            subItems = listOf("胶卷阅读机电源正常", "机房温湿度达标(20-22℃)")
-        )
-
-        // S2 Item 4: Non-linear
-        insertCheckItemWithSubItems(
-            db, s2Id,
-            title = "阅览室窗户与遮阳帘确认",
-            isLinear = false, start = null, end = null, sort = 4,
-            subItems = listOf("靠窗工位窗户关闭", "电动遮阳帘复位")
-        )
-
-        // Station 3: 5楼特藏室
-        val s3Values = ContentValues().apply {
-            put("task_id", taskId)
-            put("name", "5楼特藏室")
-            put("sort_order", 3)
-            put("is_completed", 0)
-        }
-        val s3Id = db.insert("task_stations", null, s3Values)
-
-        // S3 Item 1: Linear 20:00~20:30
-        insertCheckItemWithSubItems(
-            db, s3Id,
-            title = "20:00~20:30 恒温恒湿系统与安防监测",
-            isLinear = true, start = "20:00", end = "20:30", sort = 1,
-            subItems = listOf("恒温系统运行正常(18-20℃)", "恒湿系统指标50%-55%", "特藏库门禁授权记录正常")
-        )
-
-        // S3 Item 2: Linear 21:30~22:00
-        insertCheckItemWithSubItems(
-            db, s3Id,
-            title = "21:30~22:00 特藏密闭门加锁与气体灭火系统设防",
-            isLinear = true, start = "21:30", end = "22:00", sort = 2,
-            subItems = listOf("气体灭火控制器处于自动状态", "防盗报警主机设防", "特藏室主门双人双锁核验")
-        )
-
-        // S3 Item 3: Non-linear
-        insertCheckItemWithSubItems(
-            db, s3Id,
-            title = "古籍保护柜与无酸纸囊匣外观巡查",
-            isLinear = false, start = null, end = null, sort = 3,
-            subItems = listOf("保护柜密闭铅封完整", "无漏水及虫霉痕迹")
-        )
-
-        // S3 Item 4: Non-linear
-        insertCheckItemWithSubItems(
-            db, s3Id,
-            title = "视频监控与红外对射探测器状态",
-            isLinear = false, start = null, end = null, sort = 4,
-            subItems = listOf("监控盲区核查", "红外报警传感器指示灯正常")
-        )
-
-        // User settings
+        // 3. Initial user_settings: active_station_name = "默认岗位", theme_mode = "SYSTEM"
         val settingsValues = ContentValues().apply {
             put("id", 1)
-            put("active_station_id", s1Id)
-            put("active_station_name", "3楼自习区")
+            put("active_station_id", stationId)
+            put("active_station_name", "默认岗位")
             put("perf_level", PerfLevel.FULL)
             put("motion_scale", 1.0f)
             put("default_handoff_url", "")
             put("default_handoff_app", "com.tencent.tim")
+            put("theme_mode", "SYSTEM")
         }
         db.insertWithOnConflict("user_settings", null, settingsValues, SQLiteDatabase.CONFLICT_REPLACE)
-    }
-
-    private fun insertCheckItemWithSubItems(
-        db: SQLiteDatabase,
-        stationId: Long,
-        title: String,
-        isLinear: Boolean,
-        start: String?,
-        end: String?,
-        sort: Int,
-        subItems: List<String>
-    ) {
-        val itemValues = ContentValues().apply {
-            put("station_id", stationId)
-            put("title", title)
-            put("is_time_linear", if (isLinear) 1 else 0)
-            put("time_start", start)
-            put("time_end", end)
-            put("is_completed", 0)
-            put("is_exception", 0)
-            put("sort_order", sort)
-        }
-        val itemId = db.insert("check_items", null, itemValues)
-
-        subItems.forEachIndexed { index, subTitle ->
-            val subValues = ContentValues().apply {
-                put("parent_id", itemId)
-                put("title", subTitle)
-                put("is_completed", 0)
-                put("sort_order", index + 1)
-            }
-            db.insert("sub_items", null, subValues)
-        }
     }
 
     // --- Invalidation & Reactive Flow Helper ---
@@ -760,13 +618,21 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
                 .use { c -> if (c.moveToFirst()) parentId = c.getLong(0) }
             db.delete("sub_items", "id = ?", arrayOf(subItemId.toString()))
             if (parentId != null) {
-                db.rawQuery("SELECT COUNT(*) FROM sub_items WHERE parent_id = ? AND is_completed = 0", arrayOf(parentId.toString()))
-                    .use { c ->
-                        val uncompleted = if (c.moveToFirst()) c.getInt(0) else 0
-                        val allValues = ContentValues().apply {
-                            put("is_completed", if (uncompleted == 0) 1 else 0)
+                db.rawQuery("SELECT COUNT(*) FROM sub_items WHERE parent_id = ?", arrayOf(parentId.toString()))
+                    .use { cTotal ->
+                        val total = if (cTotal.moveToFirst()) cTotal.getInt(0) else 0
+                        if (total > 0) {
+                            db.rawQuery(
+                                "SELECT COUNT(*) FROM sub_items WHERE parent_id = ? AND is_completed = 0",
+                                arrayOf(parentId.toString())
+                            ).use { c ->
+                                val uncompleted = if (c.moveToFirst()) c.getInt(0) else 0
+                                val allValues = ContentValues().apply {
+                                    put("is_completed", if (uncompleted == 0) 1 else 0)
+                                }
+                                db.update("check_items", allValues, "id = ?", arrayOf(parentId.toString()))
+                            }
                         }
-                        db.update("check_items", allValues, "id = ?", arrayOf(parentId.toString()))
                     }
                 val stationId = queryStationIdForItem(db, parentId)
                 if (stationId != null) {
@@ -784,23 +650,48 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
     }
 
     suspend fun insertStation(taskId: Long, name: String, sortOrder: Int = 0): Long = withContext(Dispatchers.IO) {
+        val trimmed = name.trim()
         val values = ContentValues().apply {
             put("task_id", taskId)
-            put("name", name.trim())
+            put("name", trimmed)
             put("sort_order", sortOrder)
             put("is_completed", 0)
         }
         val id = writableDatabase.insert("task_stations", null, values)
         checkAndUpdateTaskCompletion(writableDatabase, taskId)
+
+        // If user_settings currently points to a non-existent station, update to this newly inserted station
+        writableDatabase.rawQuery(
+            "SELECT count(*) FROM task_stations WHERE id = (SELECT active_station_id FROM user_settings WHERE id = 1)",
+            null
+        ).use { c ->
+            val valid = if (c.moveToFirst()) c.getInt(0) > 0 else false
+            if (!valid) {
+                val setVals = ContentValues().apply {
+                    put("active_station_id", id)
+                    put("active_station_name", trimmed)
+                }
+                writableDatabase.update("user_settings", setVals, "id = 1", null)
+                notifyTableChanged("user_settings")
+            }
+        }
+
         notifyTableChanged("task_stations")
         notifyTableChanged("duty_tasks")
         id
     }
 
     suspend fun updateStationName(stationId: Long, name: String) = withContext(Dispatchers.IO) {
-        val values = ContentValues().apply { put("name", name.trim()) }
+        val trimmed = name.trim()
+        val values = ContentValues().apply { put("name", trimmed) }
         writableDatabase.update("task_stations", values, "id = ?", arrayOf(stationId.toString()))
+
+        // Synchronize active_station_name in user_settings if active station was renamed
+        val setValues = ContentValues().apply { put("active_station_name", trimmed) }
+        writableDatabase.update("user_settings", setValues, "id = 1 AND active_station_id = ?", arrayOf(stationId.toString()))
+
         notifyTableChanged("task_stations")
+        notifyTableChanged("user_settings")
     }
 
     suspend fun deleteStation(stationId: Long) = withContext(Dispatchers.IO) {
@@ -820,6 +711,26 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
 
             if (taskId != null) {
                 checkAndUpdateTaskCompletion(db, taskId)
+
+                // If the deleted station was active in user_settings, fallback to first available station
+                db.rawQuery("SELECT active_station_id FROM user_settings WHERE id = 1", null).use { c ->
+                    if (c.moveToFirst() && c.getLong(0) == stationId) {
+                        db.rawQuery(
+                            "SELECT id, name FROM task_stations WHERE task_id = ? ORDER BY sort_order ASC, id ASC LIMIT 1",
+                            arrayOf(taskId.toString())
+                        ).use { nextStation ->
+                            if (nextStation.moveToFirst()) {
+                                val newId = nextStation.getLong(0)
+                                val newName = nextStation.getString(1)
+                                val setVals = ContentValues().apply {
+                                    put("active_station_id", newId)
+                                    put("active_station_name", newName)
+                                }
+                                db.update("user_settings", setVals, "id = 1", null)
+                            }
+                        }
+                    }
+                }
             }
             db.setTransactionSuccessful()
         } finally {
@@ -829,6 +740,7 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
         notifyTableChanged("check_items")
         notifyTableChanged("task_stations")
         notifyTableChanged("duty_tasks")
+        notifyTableChanged("user_settings")
     }
 
     private fun queryStationIdForItem(db: SQLiteDatabase, itemId: Long): Long? {
@@ -907,13 +819,29 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             val newStatus = when {
                 isTaskFullyCompleted -> TaskStatus.COMPLETED
                 hasAnyCompletedStation -> TaskStatus.IN_PROGRESS
-                else -> currentStatus
+                else -> {
+                    var hasAnyCompletedItem = false
+                    db.rawQuery(
+                        """
+                        SELECT 1 FROM check_items ci
+                        JOIN task_stations ts ON ci.station_id = ts.id
+                        WHERE ts.task_id = ? AND ci.is_completed = 1
+                        LIMIT 1
+                        """.trimIndent(),
+                        arrayOf(taskId.toString())
+                    ).use { c ->
+                        if (c.moveToFirst()) hasAnyCompletedItem = true
+                    }
+                    if (hasAnyCompletedItem) TaskStatus.IN_PROGRESS else TaskStatus.NOT_STARTED
+                }
             }
             if (newStatus != currentStatus) {
                 val tValues = ContentValues().apply {
                     put("status", newStatus)
                     if (newStatus == TaskStatus.COMPLETED) {
                         put("completed_at", System.currentTimeMillis())
+                    } else if (currentStatus == TaskStatus.COMPLETED) {
+                        putNull("completed_at")
                     }
                 }
                 db.update("duty_tasks", tValues, "id = ?", arrayOf(taskId.toString()))
@@ -954,8 +882,17 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             put("motion_scale", settings.motionScale)
             put("default_handoff_url", settings.defaultHandoffUrl)
             put("default_handoff_app", settings.defaultHandoffApp)
+            put("theme_mode", settings.themeMode)
         }
         writableDatabase.insertWithOnConflict("user_settings", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        notifyTableChanged("user_settings")
+    }
+
+    suspend fun updateThemeMode(themeMode: String) = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("theme_mode", themeMode)
+        }
+        writableDatabase.update("user_settings", values, "id = 1", null)
         notifyTableChanged("user_settings")
     }
 
@@ -1128,13 +1065,20 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
     }
 
     private fun cursorToUserSettings(cursor: Cursor): UserSettings {
+        val themeModeIndex = cursor.getColumnIndex("theme_mode")
+        val themeMode = if (themeModeIndex != -1 && !cursor.isNull(themeModeIndex)) {
+            cursor.getString(themeModeIndex)
+        } else {
+            ThemeMode.SYSTEM
+        }
         return UserSettings(
             activeStationId = cursor.getLong(cursor.getColumnIndexOrThrow("active_station_id")),
             activeStationName = cursor.getString(cursor.getColumnIndexOrThrow("active_station_name")),
             perfLevel = cursor.getString(cursor.getColumnIndexOrThrow("perf_level")),
             motionScale = cursor.getFloat(cursor.getColumnIndexOrThrow("motion_scale")),
             defaultHandoffUrl = cursor.getString(cursor.getColumnIndexOrThrow("default_handoff_url")),
-            defaultHandoffApp = cursor.getString(cursor.getColumnIndexOrThrow("default_handoff_app"))
+            defaultHandoffApp = cursor.getString(cursor.getColumnIndexOrThrow("default_handoff_app")),
+            themeMode = themeMode
         )
     }
 
@@ -1150,7 +1094,7 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "oxherd.db"
-        const val DATABASE_VERSION = 1
+        const val DATABASE_VERSION = 2
 
         @Volatile
         private var instance: OxherdDatabase? = null

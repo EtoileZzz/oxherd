@@ -53,11 +53,13 @@ import kotlin.math.roundToInt
  * - 64dp threshold for tactile haptic click feedback
  * - Strikethrough growth proportional to swipe progress (0% to 100%)
  * - Freeze-inner container morphing (340ms quint with clipToBounds) to prevent reflow storms
+ * - Complete physical dismissal lifecycle: item flies off and morphs down to 0 height BEFORE onComplete removal
  *
  * @param onComplete Callback invoked when swipe is released past the threshold
  * @param isCompleted External completion state
  * @param threshold Drag distance required to arm completion (defaults to 64.dp)
  * @param dismissOnComplete Whether the item morphs down to 0 height upon completion
+ * @param canSwipeWhenCompleted Whether completed items can be swiped to toggle/restore
  * @param onDismissed Optional callback invoked after container morph animation completes
  * @param background Background revealed under the swiping card
  * @param content Foreground card content, receives (swipeProgress, isCompleted)
@@ -70,7 +72,7 @@ fun SwipeToCompleteBox(
     threshold: Dp = 64.dp,
     dismissOnComplete: Boolean = true,
     enabled: Boolean = true,
-    canSwipeWhenCompleted: Boolean = false,
+    canSwipeWhenCompleted: Boolean = true,
     shape: Shape = RoundedCornerShape(12.dp),
     onDismissed: (() -> Unit)? = null,
     background: @Composable (progress: Float, thresholdReached: Boolean, isSwipingLeft: Boolean) -> Unit = { progress, reached, isLeft ->
@@ -95,6 +97,8 @@ fun SwipeToCompleteBox(
     }
 
     val animOffsetX = remember { Animatable(0f) }
+    var dragOffsetX by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
     var rawDragX by remember { mutableFloatStateOf(0f) }
     var thresholdReached by remember { mutableStateOf(false) }
 
@@ -102,11 +106,13 @@ fun SwipeToCompleteBox(
     var measuredHeightPx by remember { mutableFloatStateOf(0f) }
     val morphCollapse = remember { Animatable(0f) } // 0f = full height, 1f = collapsed to 0
     var isMorphing by remember { mutableStateOf(false) }
+    var isDismissing by remember { mutableStateOf(false) }
 
-    // External completion observer
+    // External completion observer (for programmatic completion without drag gesture)
     LaunchedEffect(isCompleted) {
-        if (isCompleted && dismissOnComplete && !isMorphing) {
+        if (isCompleted && dismissOnComplete && !isMorphing && !isDismissing) {
             isMorphing = true
+            isDismissing = true
             morphCollapse.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
@@ -118,14 +124,19 @@ fun SwipeToCompleteBox(
         }
     }
 
-    val currentOffset = animOffsetX.value
+    val currentOffset = if (isDragging) dragOffsetX else animOffsetX.value
     val absOffset = abs(currentOffset)
-    val swipeProgress = if (isCompleted && absOffset == 0f) 1.0f else (absOffset / thresholdPx).coerceIn(0f, 1f)
+    val swipeProgress = if (isCompleted && absOffset == 0f && !canSwipeWhenCompleted) {
+        1.0f
+    } else {
+        (absOffset / thresholdPx).coerceIn(0f, 1f)
+    }
     val isSwipingLeft = currentOffset < 0f
 
     // Calculate outer container height for freeze-inner morphing
     val measuredHeightDp = with(density) { measuredHeightPx.toDp() }
-    val containerHeightModifier = if (isMorphing && measuredHeightPx > 0f) {
+    val isCollapsing = (isMorphing || isDismissing) && measuredHeightPx > 0f
+    val containerHeightModifier = if (isCollapsing) {
         val remainingFraction = (1f - morphCollapse.value).coerceIn(0f, 1f)
         Modifier.height(measuredHeightDp * remainingFraction)
     } else {
@@ -138,14 +149,14 @@ fun SwipeToCompleteBox(
             .then(containerHeightModifier)
             .clipToBounds() // Strict bound clipping: freeze inner without reflow
             .onGloballyPositioned { coords ->
-                if (!isMorphing && coords.size.height > 0) {
+                if (!isMorphing && !isDismissing && coords.size.height > 0) {
                     measuredHeightPx = coords.size.height.toFloat()
                 }
             }
     ) {
         // Inner content wrapper frozen at measured height during morph
         Box(
-            modifier = if (isMorphing && measuredHeightDp > 0.dp) {
+            modifier = if (isCollapsing && measuredHeightDp > 0.dp) {
                 Modifier.fillMaxWidth().requiredHeight(measuredHeightDp)
             } else {
                 Modifier.fillMaxWidth()
@@ -160,44 +171,54 @@ fun SwipeToCompleteBox(
                     .fillMaxWidth()
                     .offset { IntOffset(currentOffset.roundToInt(), 0) }
                     .clip(shape)
-                    .pointerInput(enabled, isCompleted, isMorphing, canSwipeWhenCompleted) {
-                        if (!enabled || isMorphing) return@pointerInput
+                    .pointerInput(enabled, isCompleted, canSwipeWhenCompleted, isDismissing, isMorphing) {
+                        if (!enabled || isMorphing || isDismissing) return@pointerInput
                         if (isCompleted && !canSwipeWhenCompleted) return@pointerInput
 
                         detectHorizontalDragGestures(
                             onDragStart = {
+                                isDragging = true
                                 rawDragX = animOffsetX.value
+                                dragOffsetX = animOffsetX.value
                             },
                             onDragEnd = {
+                                isDragging = false
                                 if (thresholdReached) {
                                     val sign = if (rawDragX >= 0f) 1f else -1f
-                                    onComplete()
                                     if (dismissOnComplete) {
+                                        isDismissing = true
                                         isMorphing = true
                                         coroutineScope.launch {
-                                            // Fly off screen in swipe direction while morphing down height
-                                            launch {
-                                                animOffsetX.animateTo(
-                                                    targetValue = sign * 1500f,
-                                                    animationSpec = tween(
-                                                        durationMillis = 260,
-                                                        easing = FluidMotionTokens.EaseExpo
+                                            animOffsetX.snapTo(dragOffsetX)
+                                            coroutineScope {
+                                                launch {
+                                                    animOffsetX.animateTo(
+                                                        targetValue = sign * 1500f,
+                                                        animationSpec = tween(
+                                                            durationMillis = 260,
+                                                            easing = FluidMotionTokens.EaseExpo
+                                                        )
                                                     )
-                                                )
-                                            }
-                                            launch {
-                                                morphCollapse.animateTo(
-                                                    targetValue = 1f,
-                                                    animationSpec = tween(
-                                                        durationMillis = resolvedDurZone,
-                                                        easing = FluidMotionTokens.EaseQuint
+                                                }
+                                                launch {
+                                                    morphCollapse.animateTo(
+                                                        targetValue = 1f,
+                                                        animationSpec = tween(
+                                                            durationMillis = resolvedDurZone,
+                                                            easing = FluidMotionTokens.EaseQuint
+                                                        )
                                                     )
-                                                )
-                                                onDismissed?.invoke()
+                                                }
                                             }
+                                            // ONLY after both animations finish, trigger completion and removal
+                                            onComplete()
+                                            onDismissed?.invoke()
                                         }
                                     } else {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onComplete()
                                         coroutineScope.launch {
+                                            animOffsetX.snapTo(dragOffsetX)
                                             animOffsetX.animateTo(
                                                 targetValue = 0f,
                                                 animationSpec = spring(
@@ -207,11 +228,13 @@ fun SwipeToCompleteBox(
                                             )
                                             thresholdReached = false
                                             rawDragX = 0f
+                                            dragOffsetX = 0f
                                         }
                                     }
                                 } else {
                                     // Release before threshold: spring back to 0
                                     coroutineScope.launch {
+                                        animOffsetX.snapTo(dragOffsetX)
                                         animOffsetX.animateTo(
                                             targetValue = 0f,
                                             animationSpec = spring(
@@ -221,11 +244,14 @@ fun SwipeToCompleteBox(
                                         )
                                         thresholdReached = false
                                         rawDragX = 0f
+                                        dragOffsetX = 0f
                                     }
                                 }
                             },
                             onDragCancel = {
+                                isDragging = false
                                 coroutineScope.launch {
+                                    animOffsetX.snapTo(dragOffsetX)
                                     animOffsetX.animateTo(
                                         targetValue = 0f,
                                         animationSpec = spring(
@@ -235,6 +261,7 @@ fun SwipeToCompleteBox(
                                     )
                                     thresholdReached = false
                                     rawDragX = 0f
+                                    dragOffsetX = 0f
                                 }
                             },
                             onHorizontalDrag = { change, dragAmount ->
@@ -250,13 +277,9 @@ fun SwipeToCompleteBox(
                                 } else {
                                     thresholdPx + (absDrag - thresholdPx) * 0.32f
                                 }
-                                val visual = damped * sign
+                                dragOffsetX = damped * sign
 
-                                coroutineScope.launch {
-                                    animOffsetX.snapTo(visual)
-                                }
-
-                                // 64dp haptic click trigger
+                                // Tactile haptic feedback when crossing threshold
                                 if (damped >= thresholdPx && !thresholdReached) {
                                     thresholdReached = true
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)

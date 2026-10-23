@@ -59,7 +59,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,6 +77,7 @@ import com.oxherd.app.data.CheckItem
 import com.oxherd.app.data.CheckItemWithSubItems
 import com.oxherd.app.data.SubItem
 import com.oxherd.app.data.TaskStation
+import com.oxherd.app.theme.LocalOxherdColors
 import com.oxherd.app.ui.motion.DefaultSwipeCompleteBackground
 import com.oxherd.app.ui.motion.FluidMotionTokens
 import com.oxherd.app.ui.motion.StrikethroughText
@@ -104,6 +105,7 @@ fun TaskDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val colors = LocalOxherdColors.current
 
     // Sub-item expanded states map
     val expandedItems = remember { mutableStateMapOf<Long, Boolean>() }
@@ -129,16 +131,27 @@ fun TaskDetailScreen(
         (uiState.linearItems + uiState.nonLinearItems).filter { it.item.isCompleted }
     }
 
-    val taskTitle = uiState.activeTask?.title ?: "周四图书馆晚班巡检"
+    val taskTitle = uiState.activeTask?.title ?: "我的值班任务"
     val stationName = uiState.currentStation?.name ?: uiState.userSettings.activeStationName
+
+    var isInitialLoad by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(650)
+        isInitialLoad = false
+    }
+    LaunchedEffect(uiState.currentStation?.id) {
+        isInitialLoad = true
+        kotlinx.coroutines.delay(650)
+        isInitialLoad = false
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = Color(0xFF0F1117),
+        containerColor = colors.background,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { isCreatingNewItem = true },
-                containerColor = Color(0xFF2563EB),
+                containerColor = colors.accent,
                 contentColor = Color.White,
                 shape = CircleShape
             ) {
@@ -155,9 +168,9 @@ fun TaskDetailScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF141823))
+                    .background(colors.surface)
                     .fluidViewInHeader()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -167,17 +180,17 @@ fun TaskDetailScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = taskTitle,
-                            fontSize = 18.sp,
+                            fontSize = 19.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = colors.textPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = "计划时间: ${uiState.activeTask?.scheduledDate ?: "今天"} ${uiState.activeTask?.scheduledTime ?: "20:00"}",
-                            fontSize = 11.sp,
-                            color = Color(0xFF8E9AAF)
+                            fontSize = 12.sp,
+                            color = colors.textSecondary
                         )
                     }
 
@@ -185,23 +198,23 @@ fun TaskDetailScreen(
                         // "交班结算" Button
                         Box(
                             modifier = Modifier
-                                .height(32.dp)
+                                .height(34.dp)
                                 .flashButton(
-                                    accentColor = Color(0xFF4CAF50),
+                                    accentColor = colors.success,
                                     cornerRadiusDp = 8.dp
                                 ) {
                                     viewModel.openCompletionDialog()
                                 }
-                                .background(Color(0xFF1B3B2B), RoundedCornerShape(8.dp))
-                                .border(1.dp, Color(0xFF2E7D32), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp),
+                                .background(colors.successContainer, RoundedCornerShape(8.dp))
+                                .border(1.dp, colors.success.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "交班结算",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF81C784)
+                                color = if (colors.isDark) Color(0xFF81C784) else Color(0xFF047857)
                             )
                         }
 
@@ -213,12 +226,13 @@ fun TaskDetailScreen(
                                 .size(36.dp)
                                 .clip(CircleShape)
                                 .flashButton(
-                                    accentColor = Color(0xFF5B8DEF),
+                                    accentColor = colors.accent,
                                     cornerRadiusDp = 18.dp
                                 ) {
                                     onNavigateToSettings()
                                 }
-                                .background(Color(0xFF222838)),
+                                .background(colors.surfaceVariant)
+                                .border(1.dp, colors.borderSubtle, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(text = "⚙️", fontSize = 16.sp)
@@ -226,7 +240,7 @@ fun TaskDetailScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Progress Bar and Stat
                 val progress = uiState.progressPercentage
@@ -239,12 +253,12 @@ fun TaskDetailScreen(
                         text = "巡检进度 ${(progress * 100).toInt()}%",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFB0C4DE)
+                        color = colors.textPrimary
                     )
                     Text(
                         text = "${completedCount(uiState)}/${totalCount(uiState)} 项已打卡",
                         fontSize = 11.sp,
-                        color = Color(0xFF8E9AAF)
+                        color = colors.textSecondary
                     )
                 }
 
@@ -256,11 +270,11 @@ fun TaskDetailScreen(
                         .fillMaxWidth()
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
-                    color = Color(0xFF4CAF50),
-                    trackColor = Color(0xFF262D3D)
+                    color = colors.success,
+                    trackColor = colors.borderSubtle
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Active Station Chip with fast dropdown switcher
                 Row(
@@ -270,26 +284,26 @@ fun TaskDetailScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { isQuickStationSwitcherOpen = true }
-                        .background(Color(0xFF1E283C))
-                        .border(1.dp, Color(0xFF384C70), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .background(colors.surfaceVariant)
+                        .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF4CAF50))
+                            .background(colors.success)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "当前岗位: $stationName",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFFD6E4FF)
+                        color = colors.textPrimary
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "▾", fontSize = 12.sp, color = Color(0xFF8BB5FF))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = "▾", fontSize = 12.sp, color = colors.accent)
                 }
             }
 
@@ -299,7 +313,7 @@ fun TaskDetailScreen(
                     .fillMaxSize()
                     .fluidViewInContent()
                     .fluidTemporalShift(uiState.currentStation?.id ?: 0L)
-                    .padding(horizontal = 14.dp)
+                    .padding(horizontal = 16.dp)
             ) {
                 // Section 1: ⏱️ Time-Linear Section
                 if (activeLinearItems.isNotEmpty()) {
@@ -307,7 +321,8 @@ fun TaskDetailScreen(
                         SectionHeader(
                             icon = "⏱️",
                             title = "时段巡查",
-                            subtitle = "到达预定时段执行，左右滑动皆可划去完成"
+                            subtitle = "到达预定时段执行，左右滑动皆可划去完成",
+                            colors = colors
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                     }
@@ -341,7 +356,7 @@ fun TaskDetailScreen(
                             onDeleteItem = {
                                 itemToDelete = itemWithSubs.item
                             },
-                            modifier = Modifier.fluidListInItem(index)
+                            modifier = Modifier.fluidListInItem(index, isInitialLoad)
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                     }
@@ -354,7 +369,8 @@ fun TaskDetailScreen(
                         SectionHeader(
                             icon = "📋",
                             title = "常规待办",
-                            subtitle = "值班期间随时可巡查，支持左右滑动快速划去"
+                            subtitle = "值班期间随时可巡查，支持左右滑动快速划去",
+                            colors = colors
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                     }
@@ -388,68 +404,139 @@ fun TaskDetailScreen(
                             onDeleteItem = {
                                 itemToDelete = itemWithSubs.item
                             },
-                            modifier = Modifier.fluidListInItem(index)
+                            modifier = Modifier.fluidListInItem(index, isInitialLoad)
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                     }
                 }
 
-                // Add New Check Item Action Row
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { isCreatingNewItem = true }
-                            .background(Color(0xFF161A24))
-                            .border(1.dp, Color(0xFF283244), RoundedCornerShape(10.dp))
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "＋", color = Color(0xFF5B8DEF), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "新增巡查项目 (时段巡查 / 常规待办)",
-                                color = Color(0xFF8BB5FF),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // Empty state if both linear and non-linear active items are empty
+                // Clean Slate / Empty State
                 if (activeLinearItems.isEmpty() && activeNonLinearItems.isEmpty()) {
                     item {
+                        if (completedItems.isEmpty()) {
+                            // Initial Clean Slate Empty State
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(colors.surface)
+                                    .border(1.dp, colors.border, RoundedCornerShape(16.dp))
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.accentContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("📋", fontSize = 28.sp)
+                                    }
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Text(
+                                        text = "当前岗位暂无巡查项目",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "岗位「${stationName}」尚未设置检查条目。\n支持自由编排时段巡查（按时间先后推进）与常规待办，并随时添加细分子条目。",
+                                        fontSize = 12.sp,
+                                        color = colors.textSecondary,
+                                        lineHeight = 18.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(18.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(46.dp)
+                                            .flashButton(accentColor = colors.accent, cornerRadiusDp = 12.dp) {
+                                                isCreatingNewItem = true
+                                            }
+                                            .background(colors.accent, RoundedCornerShape(12.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("＋", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "添加第一个巡查项目",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // All items completed
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(colors.surface)
+                                    .border(1.dp, colors.border, RoundedCornerShape(16.dp))
+                                    .padding(20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = "🎉", fontSize = 36.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "当前岗位所有项目已全部巡检完毕！",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "请点击上方「交班结算」完成归档，或点击下方继续添加新条目",
+                                        fontSize = 12.sp,
+                                        color = colors.textSecondary,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Add New Check Item Action Row (when items exist)
+                if (activeLinearItems.isNotEmpty() || activeNonLinearItems.isNotEmpty() || completedItems.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(6.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 36.dp),
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { isCreatingNewItem = true }
+                                .background(colors.surface)
+                                .border(1.dp, colors.border, RoundedCornerShape(12.dp))
+                                .padding(vertical = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = "✨", fontSize = 40.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = "＋", color = colors.accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "当前岗位待办项已全部检查完毕！",
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "可点击上方「交班结算」完成今日值班汇报，或点击添加新项目",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF8E9AAF)
+                                    text = "新增巡查项目 (时段巡查 / 常规待办)",
+                                    color = colors.accent,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
 
@@ -460,30 +547,31 @@ fun TaskDetailScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null
                                 ) { isCompletedGroupExpanded = !isCompletedGroupExpanded }
-                                .background(Color(0xFF141720))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                .background(colors.surface)
+                                .border(1.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = "✓", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "✓", color = colors.success, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "已完成检查项 (${completedItems.size})",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFA6B2C8)
+                                    color = colors.textSecondary
                                 )
                             }
                             Text(
                                 text = if (isCompletedGroupExpanded) "收起 ▲" else "展开 ▼",
                                 fontSize = 12.sp,
-                                color = Color(0xFF5B8DEF)
+                                color = colors.accent
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
@@ -495,7 +583,8 @@ fun TaskDetailScreen(
                                 item = itemWithSubs.item,
                                 onRestore = {
                                     viewModel.toggleCheckItem(itemWithSubs.item.id, false)
-                                }
+                                },
+                                colors = colors
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
@@ -503,7 +592,7 @@ fun TaskDetailScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(64.dp))
+                    Spacer(modifier = Modifier.height(72.dp))
                 }
             }
         }
@@ -585,12 +674,12 @@ fun TaskDetailScreen(
     if (deleteItem != null) {
         AlertDialog(
             onDismissRequest = { itemToDelete = null },
-            containerColor = Color(0xFF1E2330),
-            title = { Text("确认删除该巡查项目？", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            containerColor = colors.surface,
+            title = { Text("确认删除该巡查项目？", color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
             text = {
                 Text(
                     "项目「${deleteItem.title}」及其所有子条目将被永久删除。",
-                    color = Color(0xFFB0C4DE),
+                    color = colors.textSecondary,
                     fontSize = 13.sp
                 )
             },
@@ -601,12 +690,12 @@ fun TaskDetailScreen(
                         itemToDelete = null
                     }
                 ) {
-                    Text("删除", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                    Text("删除", color = colors.error, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { itemToDelete = null }) {
-                    Text("取消", color = Color(0xFF8E9AAF))
+                    Text("取消", color = colors.textSecondary)
                 }
             }
         )
@@ -630,10 +719,11 @@ fun TaskDetailScreen(
 private fun SectionHeader(
     icon: String,
     title: String,
-    subtitle: String
+    subtitle: String,
+    colors: com.oxherd.app.theme.OxherdColors
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text = icon, fontSize = 16.sp)
@@ -642,13 +732,13 @@ private fun SectionHeader(
             text = title,
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = colors.textPrimary
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = subtitle,
             fontSize = 11.sp,
-            color = Color(0xFF718096),
+            color = colors.textSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -673,6 +763,7 @@ private fun CheckItemCard(
     onDeleteItem: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalOxherdColors.current
     val item = itemWithSubs.item
     val subItems = itemWithSubs.subItems
     val isTimeLinear = item.isTimeLinear
@@ -689,17 +780,18 @@ private fun CheckItemCard(
         isCompleted = item.isCompleted,
         threshold = 64.dp,
         dismissOnComplete = true,
+        canSwipeWhenCompleted = true,
         modifier = modifier
     ) { progress, isCompleted ->
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF181C26))
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.surface)
                 .border(
                     1.dp,
-                    if (isInTimeWindow) Color(0xFF5B8DEF).copy(alpha = 0.8f) else Color(0xFF262C3A),
-                    RoundedCornerShape(12.dp)
+                    if (isInTimeWindow) colors.accent else colors.border,
+                    RoundedCornerShape(14.dp)
                 )
                 .padding(14.dp)
         ) {
@@ -713,7 +805,8 @@ private fun CheckItemCard(
                     TimeBadge(
                         timeStart = item.timeStart,
                         timeEnd = item.timeEnd ?: "",
-                        isActiveWindow = isInTimeWindow
+                        isActiveWindow = isInTimeWindow,
+                        colors = colors
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
@@ -726,7 +819,7 @@ private fun CheckItemCard(
                         style = androidx.compose.ui.text.TextStyle(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color.White
+                            color = colors.textPrimary
                         )
                     )
                 }
@@ -737,22 +830,22 @@ private fun CheckItemCard(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { onOpenEvidence() }
                         .background(
-                            if (item.isException) Color(0xFF4A1E1E)
-                            else if (!item.photoUri.isNullOrBlank()) Color(0xFF1E3A4D)
-                            else Color(0xFF222735)
+                            if (item.isException) colors.error.copy(alpha = 0.15f)
+                            else if (!item.photoUri.isNullOrBlank()) colors.accentContainer
+                            else colors.surfaceVariant
                         )
                         .border(
                             1.dp,
-                            if (item.isException) Color(0xFFFF5722)
-                            else if (!item.photoUri.isNullOrBlank()) Color(0xFF5B8DEF)
-                            else Color(0xFF333B4D),
-                            RoundedCornerShape(6.dp)
+                            if (item.isException) colors.error
+                            else if (!item.photoUri.isNullOrBlank()) colors.accent
+                            else colors.borderSubtle,
+                            RoundedCornerShape(8.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -769,32 +862,32 @@ private fun CheckItemCard(
                     Box(
                         modifier = Modifier
                             .size(32.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { showMenu = true }
-                            .background(Color(0xFF222735))
-                            .border(1.dp, Color(0xFF333B4D), RoundedCornerShape(6.dp)),
+                            .background(colors.surfaceVariant)
+                            .border(1.dp, colors.borderSubtle, RoundedCornerShape(8.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = "⋮", fontSize = 16.sp, color = Color(0xFFB0C4DE), fontWeight = FontWeight.Bold)
+                        Text(text = "⋮", fontSize = 16.sp, color = colors.textSecondary, fontWeight = FontWeight.Bold)
                     }
 
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(Color(0xFF1E2433))
+                        modifier = Modifier.background(colors.surfaceElevated)
                     ) {
                         DropdownMenuItem(
-                            text = { Text("✏️ 编辑巡查项", color = Color.White, fontSize = 13.sp) },
+                            text = { Text("✏️ 编辑巡查项", color = colors.textPrimary, fontSize = 13.sp) },
                             onClick = {
                                 showMenu = false
                                 onEditItem()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("🗑️ 删除巡查项", color = Color(0xFFFF5252), fontSize = 13.sp) },
+                            text = { Text("🗑️ 删除巡查项", color = colors.error, fontSize = 13.sp) },
                             onClick = {
                                 showMenu = false
                                 onDeleteItem()
@@ -818,7 +911,7 @@ private fun CheckItemCard(
                     Text(
                         text = if (isExpanded) "▲" else "▼",
                         fontSize = 11.sp,
-                        color = Color(0xFF8E9AAF)
+                        color = colors.textTertiary
                     )
                 }
             }
@@ -832,7 +925,7 @@ private fun CheckItemCard(
                             text = "[异常登记]",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFF7043)
+                            color = colors.warning
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                     }
@@ -840,7 +933,7 @@ private fun CheckItemCard(
                         Text(
                             text = item.note,
                             fontSize = 11.sp,
-                            color = Color(0xFFB0C4DE),
+                            color = colors.textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -864,7 +957,8 @@ private fun CheckItemCard(
                             SubItemRow(
                                 subItem = subItem,
                                 onToggle = { onToggleSubItem(subItem.id, !subItem.isCompleted) },
-                                onDelete = { onDeleteSubItem(subItem.id) }
+                                onDelete = { onDeleteSubItem(subItem.id) },
+                                colors = colors
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                         }
@@ -881,32 +975,32 @@ private fun CheckItemCard(
                             OutlinedTextField(
                                 value = newSubItemText,
                                 onValueChange = { newSubItemText = it },
-                                placeholder = { Text("输入子条目内容...", fontSize = 12.sp, color = Color(0xFF5A667A)) },
+                                placeholder = { Text("输入子条目内容...", fontSize = 12.sp, color = colors.textTertiary) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF5B8DEF),
-                                    unfocusedBorderColor = Color(0xFF2C3446),
-                                    focusedContainerColor = Color(0xFF12151D),
-                                    unfocusedContainerColor = Color(0xFF12151D),
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
+                                    focusedBorderColor = colors.accent,
+                                    unfocusedBorderColor = colors.border,
+                                    focusedContainerColor = colors.surfaceVariant,
+                                    unfocusedContainerColor = colors.surfaceVariant,
+                                    focusedTextColor = colors.textPrimary,
+                                    unfocusedTextColor = colors.textPrimary
                                 )
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
                                     .height(38.dp)
-                                    .flashButton(accentColor = Color(0xFF5B8DEF), cornerRadiusDp = 8.dp) {
+                                    .flashButton(accentColor = colors.accent, cornerRadiusDp = 8.dp) {
                                         if (newSubItemText.isNotBlank()) {
                                             onAddSubItem(newSubItemText.trim())
                                             newSubItemText = ""
                                             isAddingSubItem = false
                                         }
                                     }
-                                    .background(Color(0xFF2E4B7A), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 10.dp),
+                                    .background(colors.accent, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text("添加", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
@@ -919,7 +1013,7 @@ private fun CheckItemCard(
                                     .padding(horizontal = 6.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("取消", fontSize = 12.sp, color = Color(0xFF8E9AAF))
+                                Text("取消", fontSize = 12.sp, color = colors.textSecondary)
                             }
                         }
                     } else {
@@ -929,13 +1023,13 @@ private fun CheckItemCard(
                                 .padding(top = 4.dp)
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable { isAddingSubItem = true }
-                                .padding(vertical = 4.dp, horizontal = 2.dp),
+                                .padding(vertical = 5.dp, horizontal = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "＋ 添加子检查条目",
-                                fontSize = 11.sp,
-                                color = Color(0xFF5B8DEF),
+                                fontSize = 12.sp,
+                                color = colors.accent,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -953,11 +1047,12 @@ private fun CheckItemCard(
 private fun TimeBadge(
     timeStart: String,
     timeEnd: String,
-    isActiveWindow: Boolean
+    isActiveWindow: Boolean,
+    colors: com.oxherd.app.theme.OxherdColors
 ) {
     val infiniteTransition = rememberInfiniteTransition()
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
+        initialValue = 0.5f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
             animation = tween(800, easing = FluidMotionTokens.EaseQuint),
@@ -971,13 +1066,13 @@ private fun TimeBadge(
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .background(
-                if (isActiveWindow) Color(0xFF1E3A5F).copy(alpha = glowAlpha)
-                else Color(0xFF222633)
+                if (isActiveWindow) colors.accentContainer.copy(alpha = glowAlpha)
+                else colors.surfaceVariant
             )
             .border(
                 1.dp,
-                if (isActiveWindow) Color(0xFF5B8DEF).copy(alpha = glowAlpha)
-                else Color(0xFF333B4D),
+                if (isActiveWindow) colors.accent.copy(alpha = glowAlpha)
+                else colors.borderSubtle,
                 RoundedCornerShape(6.dp)
             )
             .padding(horizontal = 6.dp, vertical = 3.dp),
@@ -989,7 +1084,7 @@ private fun TimeBadge(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF64B5F6))
+                        .background(colors.accent)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
             }
@@ -998,7 +1093,7 @@ private fun TimeBadge(
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = if (isActiveWindow) FontWeight.Bold else FontWeight.Normal,
-                color = if (isActiveWindow) Color(0xFFE3F2FD) else Color(0xFF8E9AAF)
+                color = if (isActiveWindow) colors.accentContent else colors.textSecondary
             )
         }
     }
@@ -1013,7 +1108,8 @@ private fun TimeBadge(
 private fun SubItemRow(
     subItem: SubItem,
     onToggle: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    colors: com.oxherd.app.theme.OxherdColors
 ) {
     SwipeToCompleteBox(
         onComplete = onToggle,
@@ -1028,6 +1124,8 @@ private fun SubItemRow(
                 thresholdReached = reached,
                 isSwipingLeft = isLeft,
                 shape = RoundedCornerShape(8.dp),
+                activeColor = colors.success,
+                inactiveColor = colors.surfaceVariant,
                 iconSize = 22.dp,
                 fontSize = 13.sp,
                 horizontalPadding = 12.dp
@@ -1042,7 +1140,7 @@ private fun SubItemRow(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { onToggle() }
-                .background(Color(0xFF12151D))
+                .background(colors.surfaceVariant)
                 .padding(horizontal = 8.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1050,8 +1148,8 @@ private fun SubItemRow(
                 checked = subItem.isCompleted,
                 onCheckedChange = { onToggle() },
                 colors = CheckboxDefaults.colors(
-                    checkedColor = Color(0xFF4CAF50),
-                    uncheckedColor = Color(0xFF525D73),
+                    checkedColor = colors.success,
+                    uncheckedColor = colors.border,
                     checkmarkColor = Color.White
                 ),
                 modifier = Modifier.size(20.dp)
@@ -1063,7 +1161,7 @@ private fun SubItemRow(
                     progress = if (subItem.isCompleted) 1f else progress,
                     style = androidx.compose.ui.text.TextStyle(
                         fontSize = 12.sp,
-                        color = if (subItem.isCompleted) Color(0xFF687387) else Color(0xFFC7D2E5)
+                        color = if (subItem.isCompleted) colors.textTertiary else colors.textPrimary
                     )
                 )
             }
@@ -1078,7 +1176,7 @@ private fun SubItemRow(
                     ) { onDelete() },
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "✕", fontSize = 11.sp, color = Color(0xFF5A667A))
+                Text(text = "✕", fontSize = 11.sp, color = colors.textTertiary)
             }
         }
     }
@@ -1090,14 +1188,16 @@ private fun SubItemRow(
 @Composable
 private fun CompletedItemRow(
     item: CheckItem,
-    onRestore: () -> Unit
+    onRestore: () -> Unit,
+    colors: com.oxherd.app.theme.OxherdColors
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF12141C))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .clip(RoundedCornerShape(10.dp))
+            .background(colors.surface)
+            .border(1.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1109,13 +1209,13 @@ private fun CompletedItemRow(
                 text = "✓",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF4CAF50)
+                color = colors.success
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = item.title,
                 fontSize = 13.sp,
-                color = Color(0xFF6E788B),
+                color = colors.textTertiary,
                 textDecoration = TextDecoration.LineThrough,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1125,7 +1225,7 @@ private fun CompletedItemRow(
         Text(
             text = "撤销",
             fontSize = 11.sp,
-            color = Color(0xFF5B8DEF),
+            color = colors.accent,
             modifier = Modifier
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -1149,13 +1249,14 @@ private fun StationManagerBottomSheet(
     onCreateStation: (name: String) -> Unit,
     onDeleteStation: (stationId: Long) -> Unit
 ) {
+    val colors = LocalOxherdColors.current
     var isAddingStation by remember { mutableStateOf(false) }
     var newStationName by remember { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
-        containerColor = Color(0xFF161A24)
+        containerColor = colors.surface
     ) {
         Column(
             modifier = Modifier
@@ -1166,13 +1267,13 @@ private fun StationManagerBottomSheet(
                 text = "巡检岗位与楼层管理",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "专人专岗：自由切换或添加自定义巡查岗位",
                 fontSize = 12.sp,
-                color = Color(0xFF8E9AAF)
+                color = colors.textSecondary
             )
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -1186,8 +1287,12 @@ private fun StationManagerBottomSheet(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { onSelectStation(station.id) }
-                        .background(if (isSelected) Color(0xFF223554) else Color(0xFF1C2230))
-                        .border(1.dp, if (isSelected) Color(0xFF5B8DEF) else Color(0xFF2C3446), RoundedCornerShape(10.dp))
+                        .background(if (isSelected) colors.accentContainer else colors.surfaceVariant)
+                        .border(
+                            1.dp,
+                            if (isSelected) colors.accent else colors.border,
+                            RoundedCornerShape(10.dp)
+                        )
                         .padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -1197,11 +1302,11 @@ private fun StationManagerBottomSheet(
                             text = station.name,
                             fontSize = 14.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) Color(0xFF8BB5FF) else Color.White
+                            color = if (isSelected) colors.accentContent else colors.textPrimary
                         )
                         if (isSelected) {
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "✓ 当前", fontSize = 11.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                            Text(text = "✓ 当前", fontSize = 11.sp, color = colors.success, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -1209,7 +1314,7 @@ private fun StationManagerBottomSheet(
                         Text(
                             text = "删除",
                             fontSize = 12.sp,
-                            color = Color(0xFFFF5252),
+                            color = colors.error,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
                                 .clickable { onDeleteStation(station.id) }
@@ -1230,31 +1335,31 @@ private fun StationManagerBottomSheet(
                     OutlinedTextField(
                         value = newStationName,
                         onValueChange = { newStationName = it },
-                        placeholder = { Text("输入新岗位/楼层名称...", color = Color(0xFF5A667A), fontSize = 13.sp) },
+                        placeholder = { Text("输入新岗位/楼层名称...", color = colors.textTertiary, fontSize = 13.sp) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color(0xFF5B8DEF),
-                            unfocusedBorderColor = Color(0xFF2D3748),
-                            focusedContainerColor = Color(0xFF151922),
-                            unfocusedContainerColor = Color(0xFF151922),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.border,
+                            focusedContainerColor = colors.surfaceVariant,
+                            unfocusedContainerColor = colors.surfaceVariant,
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary
                         )
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
                             .height(48.dp)
-                            .flashButton(accentColor = Color(0xFF5B8DEF), cornerRadiusDp = 10.dp) {
+                            .flashButton(accentColor = colors.accent, cornerRadiusDp = 10.dp) {
                                 if (newStationName.isNotBlank()) {
                                     onCreateStation(newStationName.trim())
                                     newStationName = ""
                                     isAddingStation = false
                                 }
                             }
-                            .background(Color(0xFF2563EB), RoundedCornerShape(10.dp))
+                            .background(colors.accent, RoundedCornerShape(10.dp))
                             .padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1268,11 +1373,11 @@ private fun StationManagerBottomSheet(
                         .height(44.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .clickable { isAddingStation = true }
-                        .background(Color(0xFF1E283C))
-                        .border(1.dp, Color(0xFF384C70), RoundedCornerShape(10.dp)),
+                        .background(colors.surfaceVariant)
+                        .border(1.dp, colors.border, RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("+ 添加自定义岗位 / 楼层", color = Color(0xFF8BB5FF), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("+ 添加自定义岗位 / 楼层", color = colors.accent, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
@@ -1291,6 +1396,7 @@ private fun CheckItemEditorModal(
     onDismiss: () -> Unit,
     onSave: (title: String, isTimeLinear: Boolean, timeStart: String?, timeEnd: String?) -> Unit
 ) {
+    val colors = LocalOxherdColors.current
     var title by remember { mutableStateOf(initialItem?.title ?: "") }
     var isTimeLinear by remember { mutableStateOf(initialItem?.isTimeLinear ?: false) }
     var timeStart by remember { mutableStateOf(initialItem?.timeStart ?: "20:00") }
@@ -1299,7 +1405,7 @@ private fun CheckItemEditorModal(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF161A24)
+        containerColor = colors.surface
     ) {
         Column(
             modifier = Modifier
@@ -1310,26 +1416,26 @@ private fun CheckItemEditorModal(
                 text = if (initialItem != null) "编辑巡查项目" else "新增巡查项目",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text("检查项目名称", fontSize = 12.sp, color = Color(0xFFB0C4DE), fontWeight = FontWeight.Medium)
+            Text("检查项目名称", fontSize = 12.sp, color = colors.textSecondary, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(4.dp))
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                placeholder = { Text("如: 检查防火卷帘门与消防栓", color = Color(0xFF5A667A), fontSize = 13.sp) },
+                placeholder = { Text("如: 检查防火卷帘门与消防栓", color = colors.textTertiary, fontSize = 13.sp) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF5B8DEF),
-                    unfocusedBorderColor = Color(0xFF2D3748),
-                    focusedContainerColor = Color(0xFF151922),
-                    unfocusedContainerColor = Color(0xFF151922),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.border,
+                    focusedContainerColor = colors.surfaceVariant,
+                    unfocusedContainerColor = colors.surfaceVariant,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary
                 )
             )
 
@@ -1340,7 +1446,8 @@ private fun CheckItemEditorModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF1E2433))
+                    .background(colors.surfaceVariant)
+                    .border(1.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -1350,12 +1457,12 @@ private fun CheckItemEditorModal(
                         text = if (isTimeLinear) "⏱️ 时段巡查 (严格时间线性)" else "📋 常规待办 (自由时段)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color.White
+                        color = colors.textPrimary
                     )
                     Text(
                         text = if (isTimeLinear) "到达指定时段高亮置顶提醒" else "值班期间随时执行，支持左右滑动划去",
                         fontSize = 11.sp,
-                        color = Color(0xFF8E9AAF)
+                        color = colors.textSecondary
                     )
                 }
                 Switch(
@@ -1363,9 +1470,9 @@ private fun CheckItemEditorModal(
                     onCheckedChange = { isTimeLinear = it },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFF2563EB),
-                        uncheckedThumbColor = Color(0xFF8E9AAF),
-                        uncheckedTrackColor = Color(0xFF2C344A)
+                        checkedTrackColor = colors.accent,
+                        uncheckedThumbColor = colors.textSecondary,
+                        uncheckedTrackColor = colors.border
                     )
                 )
             }
@@ -1374,43 +1481,43 @@ private fun CheckItemEditorModal(
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("起始时间 (HH:mm)", fontSize = 11.sp, color = Color(0xFFB0C4DE))
+                        Text("起始时间 (HH:mm)", fontSize = 11.sp, color = colors.textSecondary)
                         Spacer(modifier = Modifier.height(4.dp))
                         OutlinedTextField(
                             value = timeStart,
                             onValueChange = { timeStart = it },
-                            placeholder = { Text("20:00", color = Color(0xFF5A667A), fontSize = 13.sp) },
+                            placeholder = { Text("20:00", color = colors.textTertiary, fontSize = 13.sp) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF5B8DEF),
-                                unfocusedBorderColor = Color(0xFF2D3748),
-                                focusedContainerColor = Color(0xFF151922),
-                                unfocusedContainerColor = Color(0xFF151922),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
+                                focusedBorderColor = colors.accent,
+                                unfocusedBorderColor = colors.border,
+                                focusedContainerColor = colors.surfaceVariant,
+                                unfocusedContainerColor = colors.surfaceVariant,
+                                focusedTextColor = colors.textPrimary,
+                                unfocusedTextColor = colors.textPrimary
                             )
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("结束时间 (HH:mm)", fontSize = 11.sp, color = Color(0xFFB0C4DE))
+                        Text("结束时间 (HH:mm)", fontSize = 11.sp, color = colors.textSecondary)
                         Spacer(modifier = Modifier.height(4.dp))
                         OutlinedTextField(
                             value = timeEnd,
                             onValueChange = { timeEnd = it },
-                            placeholder = { Text("20:30", color = Color(0xFF5A667A), fontSize = 13.sp) },
+                            placeholder = { Text("20:30", color = colors.textTertiary, fontSize = 13.sp) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF5B8DEF),
-                                unfocusedBorderColor = Color(0xFF2D3748),
-                                focusedContainerColor = Color(0xFF151922),
-                                unfocusedContainerColor = Color(0xFF151922),
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White
+                                focusedBorderColor = colors.accent,
+                                unfocusedBorderColor = colors.border,
+                                focusedContainerColor = colors.surfaceVariant,
+                                unfocusedContainerColor = colors.surfaceVariant,
+                                focusedTextColor = colors.textPrimary,
+                                unfocusedTextColor = colors.textPrimary
                             )
                         )
                     }
@@ -1423,7 +1530,7 @@ private fun CheckItemEditorModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .flashButton(accentColor = Color(0xFF5B8DEF), cornerRadiusDp = 12.dp) {
+                    .flashButton(accentColor = colors.accent, cornerRadiusDp = 12.dp) {
                         if (title.isNotBlank()) {
                             onSave(
                                 title.trim(),
@@ -1433,7 +1540,7 @@ private fun CheckItemEditorModal(
                             )
                         }
                     }
-                    .background(Color(0xFF2563EB), RoundedCornerShape(12.dp)),
+                    .background(colors.accent, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -1460,6 +1567,7 @@ private fun EvidenceEntrySheet(
     onSave: (photoUri: String?, note: String?, isException: Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val colors = LocalOxherdColors.current
     var note by remember(item.note) { mutableStateOf(item.note ?: "") }
     var photoUri by remember(item.photoUri) { mutableStateOf(item.photoUri) }
     var isException by remember(item.isException) { mutableStateOf(item.isException) }
@@ -1476,7 +1584,7 @@ private fun EvidenceEntrySheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF161A24)
+        containerColor = colors.surface
     ) {
         Column(
             modifier = Modifier
@@ -1487,13 +1595,13 @@ private fun EvidenceEntrySheet(
                 text = "登记检查凭证与异常说明",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = item.title,
                 fontSize = 13.sp,
-                color = Color(0xFF8E9AAF)
+                color = colors.textSecondary
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1509,8 +1617,8 @@ private fun EvidenceEntrySheet(
                     ) {
                         photoPickerLauncher.launch("image/*")
                     }
-                    .background(Color(0xFF1E2433))
-                    .border(1.dp, Color(0xFF333D54), RoundedCornerShape(10.dp))
+                    .background(colors.surfaceVariant)
+                    .border(1.dp, colors.border, RoundedCornerShape(10.dp))
                     .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1518,7 +1626,7 @@ private fun EvidenceEntrySheet(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF2C344A)),
+                        .background(colors.surfaceElevated),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(text = "📷", fontSize = 22.sp)
@@ -1529,17 +1637,17 @@ private fun EvidenceEntrySheet(
                         text = if (!photoUri.isNullOrBlank()) "已选择凭证照片" else "点击拍摄或上传现场照片",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color.White
+                        color = colors.textPrimary
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = if (!photoUri.isNullOrBlank()) "点击可重新更换照片" else "自动按岗位分类存入凭证抽屉",
                         fontSize = 11.sp,
-                        color = Color(0xFF8E9AAF)
+                        color = colors.textSecondary
                     )
                 }
                 if (!photoUri.isNullOrBlank()) {
-                    Text(text = "✓", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(text = "✓", color = colors.success, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             }
 
@@ -1550,8 +1658,8 @@ private fun EvidenceEntrySheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF1E2433))
-                    .border(1.dp, if (isException) Color(0xFFFF5722) else Color(0xFF333D54), RoundedCornerShape(10.dp))
+                    .background(colors.surfaceVariant)
+                    .border(1.dp, if (isException) colors.warning else colors.border, RoundedCornerShape(10.dp))
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -1561,12 +1669,12 @@ private fun EvidenceEntrySheet(
                         text = "标记为异常事项 (Flag Exception)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (isException) Color(0xFFFF7043) else Color.White
+                        color = if (isException) colors.warning else colors.textPrimary
                     )
                     Text(
                         text = "异常项将高亮标示并自动汇总至交班日报",
                         fontSize = 11.sp,
-                        color = Color(0xFF8E9AAF)
+                        color = colors.textSecondary
                     )
                 }
                 Switch(
@@ -1574,9 +1682,9 @@ private fun EvidenceEntrySheet(
                     onCheckedChange = { isException = it },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFFFF5722),
-                        uncheckedThumbColor = Color(0xFF8E9AAF),
-                        uncheckedTrackColor = Color(0xFF2C344A)
+                        checkedTrackColor = colors.warning,
+                        uncheckedThumbColor = colors.textSecondary,
+                        uncheckedTrackColor = colors.border
                     )
                 )
             }
@@ -1588,26 +1696,26 @@ private fun EvidenceEntrySheet(
                 text = "巡查观察与文字说明",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFFB0C4DE)
+                color = colors.textSecondary
             )
             Spacer(modifier = Modifier.height(4.dp))
 
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                placeholder = { Text("输入巡查现场情况或异常具体说明...", color = Color(0xFF4A5568), fontSize = 13.sp) },
+                placeholder = { Text("输入巡查现场情况或异常具体说明...", color = colors.textTertiary, fontSize = 13.sp) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 90.dp),
                 shape = RoundedCornerShape(10.dp),
                 maxLines = 4,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF5B8DEF),
-                    unfocusedBorderColor = Color(0xFF2D3748),
-                    focusedContainerColor = Color(0xFF151922),
-                    unfocusedContainerColor = Color(0xFF151922),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.border,
+                    focusedContainerColor = colors.surfaceVariant,
+                    unfocusedContainerColor = colors.surfaceVariant,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary
                 )
             )
 
@@ -1619,13 +1727,13 @@ private fun EvidenceEntrySheet(
                     .fillMaxWidth()
                     .height(48.dp)
                     .flashButton(
-                        accentColor = Color(0xFF5B8DEF),
+                        accentColor = colors.accent,
                         cornerRadiusDp = 12.dp
                     ) {
                         onSave(photoUri, note.trim().ifBlank { null }, isException)
                         Toast.makeText(context, "凭证记录已保存", Toast.LENGTH_SHORT).show()
                     }
-                    .background(Color(0xFF2563EB), RoundedCornerShape(12.dp)),
+                    .background(colors.accent, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

@@ -15,16 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -33,8 +29,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,17 +38,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.oxherd.app.data.PerfLevel
+import com.oxherd.app.theme.LocalOxherdColors
+import com.oxherd.app.theme.OxherdColors
 import com.oxherd.app.ui.motion.SlidePillSegmentedControl
 import com.oxherd.app.ui.motion.flashButton
 
 /**
- * Settings screen allowing duty station selection, Fluid Motion preferences tuning,
- * and integration link setup.
+ * Settings screen allowing duty station selection, visual theme mode tuning,
+ * Fluid Motion preferences tuning, and integration link setup.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +60,7 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val colors = LocalOxherdColors.current
 
     val currentSettings = uiState.userSettings
     var formUrl by remember(currentSettings.defaultHandoffUrl) {
@@ -72,6 +68,13 @@ fun SettingsScreen(
     }
     var targetApp by remember(currentSettings.defaultHandoffApp) {
         mutableStateOf(currentSettings.defaultHandoffApp)
+    }
+
+    val themeModes = listOf("跟随系统 (AUTO)", "深色模式 (DARK)", "浅色模式 (LIGHT)")
+    val currentThemeIndex = when (currentSettings.themeMode) {
+        "DARK" -> 1
+        "LIGHT" -> 2
+        else -> 0
     }
 
     val motionModes = listOf("完整 (FULL)", "标准 (LITE)", "极速 (MIN)")
@@ -89,15 +92,15 @@ fun SettingsScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = Color(0xFF0F1117),
+        containerColor = colors.background,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = "值班巡检与动效设置",
+                        text = "值班巡检与个性化设置",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = colors.textPrimary
                     )
                 },
                 navigationIcon = {
@@ -106,18 +109,19 @@ fun SettingsScreen(
                             .padding(start = 8.dp)
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1E222D))
+                            .background(colors.surfaceVariant)
+                            .border(1.dp, colors.borderSubtle, CircleShape)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { onBack() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(text = "←", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "←", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0F1117)
+                    containerColor = colors.background
                 )
             )
         }
@@ -131,8 +135,41 @@ fun SettingsScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            // ── Section 1: Active Station Switcher ──
-            SettingsSectionHeader(title = "当前值班岗位 (ACTIVE POST)", subtitle = "专人专岗：切换负责楼层后，主页将专注呈现该点位任务")
+            // ── Section 1: Appearance Theme Mode ──
+            SettingsSectionHeader(
+                title = "外观色彩主题 (THEME MODE)",
+                subtitle = "自适应暗黑与明亮模式，完美契合系统或手动锁定偏好",
+                colors = colors
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            SlidePillSegmentedControl(
+                items = themeModes,
+                selectedIndex = currentThemeIndex,
+                onItemSelected = { index ->
+                    val newTheme = when (index) {
+                        1 -> "DARK"
+                        2 -> "LIGHT"
+                        else -> "SYSTEM"
+                    }
+                    viewModel.updateUserSettings(currentSettings.copy(themeMode = newTheme))
+                },
+                containerColor = colors.surfaceVariant,
+                pillColor = colors.accent,
+                activeContentColor = Color.White,
+                contentColor = colors.textSecondary,
+                height = 42.dp
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Section 2: Active Station Switcher ──
+            SettingsSectionHeader(
+                title = "当前值班岗位 (ACTIVE POST)",
+                subtitle = "专人专岗：切换负责楼层后，主页将专注呈现该点位任务",
+                colors = colors
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -154,10 +191,10 @@ fun SettingsScreen(
                             viewModel.switchStation(selectedStation.id)
                         }
                     },
-                    containerColor = Color(0xFF1A1E29),
-                    pillColor = Color(0xFF2E5B9A),
-                    activeContentColor = Color.White,
-                    contentColor = Color(0xFF8E9AAF),
+                    containerColor = colors.surfaceVariant,
+                    pillColor = colors.accentContainer,
+                    activeContentColor = colors.accentContent,
+                    contentColor = colors.textSecondary,
                     height = 44.dp
                 )
 
@@ -168,8 +205,9 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF141822))
-                        .padding(10.dp)
+                        .background(colors.surface)
+                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+                        .padding(12.dp)
                 ) {
                     stations.forEach { st ->
                         Row(
@@ -181,7 +219,7 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 text = st.name,
-                                color = if (st.id == currentSettings.activeStationId) Color(0xFF8BB5FF) else Color(0xFFB0C4DE),
+                                color = if (st.id == currentSettings.activeStationId) colors.accent else colors.textSecondary,
                                 fontSize = 13.sp,
                                 fontWeight = if (st.id == currentSettings.activeStationId) FontWeight.Bold else FontWeight.Normal
                             )
@@ -189,7 +227,7 @@ fun SettingsScreen(
                                 Text(
                                     text = "删除",
                                     fontSize = 11.sp,
-                                    color = Color(0xFFFF5252),
+                                    color = colors.error,
                                     modifier = Modifier
                                         .clickable { viewModel.deleteStation(st.id) }
                                         .padding(4.dp)
@@ -208,31 +246,31 @@ fun SettingsScreen(
                             OutlinedTextField(
                                 value = newStationNameInSettings,
                                 onValueChange = { newStationNameInSettings = it },
-                                placeholder = { Text("岗位名称...", fontSize = 12.sp, color = Color(0xFF5A667A)) },
+                                placeholder = { Text("岗位名称...", fontSize = 12.sp, color = colors.textTertiary) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = RoundedCornerShape(8.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF5B8DEF),
-                                    unfocusedBorderColor = Color(0xFF2C3446),
-                                    focusedContainerColor = Color(0xFF1B2230),
-                                    unfocusedContainerColor = Color(0xFF1B2230),
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
+                                    focusedBorderColor = colors.accent,
+                                    unfocusedBorderColor = colors.border,
+                                    focusedContainerColor = colors.surfaceVariant,
+                                    unfocusedContainerColor = colors.surfaceVariant,
+                                    focusedTextColor = colors.textPrimary,
+                                    unfocusedTextColor = colors.textPrimary
                                 )
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
                                 modifier = Modifier
                                     .height(38.dp)
-                                    .flashButton(accentColor = Color(0xFF5B8DEF), cornerRadiusDp = 8.dp) {
+                                    .flashButton(accentColor = colors.accent, cornerRadiusDp = 8.dp) {
                                         if (newStationNameInSettings.isNotBlank()) {
-                                            viewModel.createStation(newStationNameInSettings.trim())
-                                            newStationNameInSettings = ""
-                                            isAddingStationInSettings = false
+                                             viewModel.createStation(newStationNameInSettings.trim())
+                                             newStationNameInSettings = ""
+                                             isAddingStationInSettings = false
                                         }
                                     }
-                                    .background(Color(0xFF2563EB), RoundedCornerShape(8.dp))
+                                    .background(colors.accent, RoundedCornerShape(8.dp))
                                     .padding(horizontal = 12.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -246,14 +284,14 @@ fun SettingsScreen(
                                     .padding(horizontal = 6.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("取消", fontSize = 12.sp, color = Color(0xFF8E9AAF))
+                                Text("取消", fontSize = 12.sp, color = colors.textSecondary)
                             }
                         }
                     } else {
                         Text(
                             text = "+ 添加自定义岗位 / 楼层",
                             fontSize = 12.sp,
-                            color = Color(0xFF5B8DEF),
+                            color = colors.accent,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
                                 .clickable { isAddingStationInSettings = true }
@@ -264,17 +302,18 @@ fun SettingsScreen(
             } else {
                 Text(
                     text = "当前岗位：${currentSettings.activeStationName}",
-                    color = Color.White,
+                    color = colors.textPrimary,
                     fontSize = 14.sp
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Section 2: Fluid Motion Design Specification Preferences ──
+            // ── Section 3: Fluid Motion Design Specification Preferences ──
             SettingsSectionHeader(
                 title = "流体物理动效引擎 (FLUID MOTION)",
-                subtitle = "基于 Fluid Motion 规范的非线性贝塞尔物理补间与分级降级体系"
+                subtitle = "基于 Fluid Motion 规范的非线性贝塞尔物理补间与分级降级体系",
+                colors = colors
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -283,7 +322,7 @@ fun SettingsScreen(
                 text = "动效渲染档位 (Performance Tier)",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFFB0C4DE)
+                color = colors.textSecondary
             )
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -298,10 +337,10 @@ fun SettingsScreen(
                     }
                     viewModel.updateUserSettings(currentSettings.copy(perfLevel = newLevel))
                 },
-                containerColor = Color(0xFF1A1E29),
-                pillColor = Color(0xFF334155),
-                activeContentColor = Color(0xFF60A5FA),
-                contentColor = Color(0xFF8E9AAF),
+                containerColor = colors.surfaceVariant,
+                pillColor = if (colors.isDark) colors.surfaceElevated else colors.surface,
+                activeContentColor = colors.accent,
+                contentColor = colors.textSecondary,
                 height = 42.dp
             )
 
@@ -314,7 +353,7 @@ fun SettingsScreen(
             Text(
                 text = modeExplanation,
                 fontSize = 11.sp,
-                color = Color(0xFF718096),
+                color = colors.textTertiary,
                 lineHeight = 16.sp
             )
 
@@ -324,7 +363,7 @@ fun SettingsScreen(
                 text = "动效时长倍率 (Global Speed Multiplier)",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFFB0C4DE)
+                color = colors.textSecondary
             )
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -335,19 +374,20 @@ fun SettingsScreen(
                     val newScale = speedMultipliers.getOrElse(index) { 1.0f }
                     viewModel.updateUserSettings(currentSettings.copy(motionScale = newScale))
                 },
-                containerColor = Color(0xFF1A1E29),
-                pillColor = Color(0xFF2563EB),
+                containerColor = colors.surfaceVariant,
+                pillColor = colors.accent,
                 activeContentColor = Color.White,
-                contentColor = Color(0xFF8E9AAF),
+                contentColor = colors.textSecondary,
                 height = 40.dp
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Section 3: Integration & External Links ──
+            // ── Section 4: Integration & External Links ──
             SettingsSectionHeader(
                 title = "交班协同与链接联动 (HANDOFF LINKS)",
-                subtitle = "打卡完成后自动提供一键跳转填表与工作群汇报支持"
+                subtitle = "打卡完成后自动提供一键跳转填表与工作群汇报支持",
+                colors = colors
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -356,24 +396,24 @@ fun SettingsScreen(
                 text = "预置巡查表单链接 (Web Form URL)",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFFB0C4DE)
+                color = colors.textSecondary
             )
             Spacer(modifier = Modifier.height(4.dp))
 
             OutlinedTextField(
                 value = formUrl,
                 onValueChange = { formUrl = it },
-                placeholder = { Text("如: https://docs.qq.com/form/page/...", color = Color(0xFF4A5568), fontSize = 13.sp) },
+                placeholder = { Text("如: https://docs.qq.com/form/page/...", color = colors.textTertiary, fontSize = 13.sp) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF5B8DEF),
-                    unfocusedBorderColor = Color(0xFF2D3748),
-                    focusedContainerColor = Color(0xFF151922),
-                    unfocusedContainerColor = Color(0xFF151922),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.border,
+                    focusedContainerColor = colors.surface,
+                    unfocusedContainerColor = colors.surface,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary
                 )
             )
 
@@ -383,24 +423,24 @@ fun SettingsScreen(
                 text = "目标工作汇报应用包名 (Target App Package)",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFFB0C4DE)
+                color = colors.textSecondary
             )
             Spacer(modifier = Modifier.height(4.dp))
 
             OutlinedTextField(
                 value = targetApp,
                 onValueChange = { targetApp = it },
-                placeholder = { Text("默认: com.tencent.tim", color = Color(0xFF4A5568), fontSize = 13.sp) },
+                placeholder = { Text("默认: com.tencent.tim", color = colors.textTertiary, fontSize = 13.sp) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF5B8DEF),
-                    unfocusedBorderColor = Color(0xFF2D3748),
-                    focusedContainerColor = Color(0xFF151922),
-                    unfocusedContainerColor = Color(0xFF151922),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
+                    focusedBorderColor = colors.accent,
+                    unfocusedBorderColor = colors.border,
+                    focusedContainerColor = colors.surface,
+                    unfocusedContainerColor = colors.surface,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary
                 )
             )
 
@@ -412,7 +452,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .height(48.dp)
                     .flashButton(
-                        accentColor = Color(0xFF5B8DEF),
+                        accentColor = colors.accent,
                         cornerRadiusDp = 12.dp
                     ) {
                         viewModel.updateUserSettings(
@@ -424,7 +464,7 @@ fun SettingsScreen(
                         Toast.makeText(context, "设置已保存", Toast.LENGTH_SHORT).show()
                         onBack()
                     }
-                    .background(Color(0xFF2563EB), RoundedCornerShape(12.dp)),
+                    .background(colors.accent, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -437,13 +477,13 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // ── Section 4: Schedule info box ──
+            // ── Section 5: Schedule info box ──
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF131722))
-                    .border(1.dp, Color(0xFF242C3F), RoundedCornerShape(12.dp))
+                    .background(colors.surface)
+                    .border(1.dp, colors.border, RoundedCornerShape(12.dp))
                     .padding(14.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -453,7 +493,7 @@ fun SettingsScreen(
                         text = "自动排班与系统通知唤醒",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White
+                        color = colors.textPrimary
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
@@ -461,7 +501,7 @@ fun SettingsScreen(
                     text = "周期规则：每周四 20:00 准时执勤\n提醒设定：提前 15 分钟发出高优先级状态栏通知，点击通知瞬间秒开进入巡检打卡页。",
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
-                    color = Color(0xFF8E9AAF)
+                    color = colors.textSecondary
                 )
             }
 
@@ -473,21 +513,22 @@ fun SettingsScreen(
 @Composable
 private fun SettingsSectionHeader(
     title: String,
-    subtitle: String
+    subtitle: String,
+    colors: OxherdColors = LocalOxherdColors.current
 ) {
     Column {
         Text(
             text = title,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF5B8DEF),
+            color = colors.accent,
             letterSpacing = 1.sp
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = subtitle,
             fontSize = 12.sp,
-            color = Color(0xFF718096),
+            color = colors.textSecondary,
             lineHeight = 16.sp
         )
     }
