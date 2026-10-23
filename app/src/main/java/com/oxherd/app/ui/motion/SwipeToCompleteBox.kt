@@ -41,17 +41,20 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Swipe-to-complete physical interaction container adhering to the Fluid Motion Design Specification:
- * - Damped swipe gesture with non-linear spring resistance beyond threshold
- * - 64dp threshold for haptic click feedback
+ * Bidirectional Swipe-to-complete physical interaction container adhering to Fluid Motion Design Specification:
+ * - Supports BOTH left swipe and right swipe to complete / dismiss!
+ * - Non-linear spring damping resistance beyond 64dp threshold
+ * - 64dp threshold for tactile haptic click feedback
  * - Strikethrough growth proportional to swipe progress (0% to 100%)
  * - Freeze-inner container morphing (340ms quint with clipToBounds) to prevent reflow storms
  *
- * @param onComplete Callback invoked when swipe is released past the 64dp threshold
+ * @param onComplete Callback invoked when swipe is released past the threshold
  * @param isCompleted External completion state
  * @param threshold Drag distance required to arm completion (defaults to 64.dp)
  * @param dismissOnComplete Whether the item morphs down to 0 height upon completion
@@ -67,10 +70,16 @@ fun SwipeToCompleteBox(
     threshold: Dp = 64.dp,
     dismissOnComplete: Boolean = true,
     enabled: Boolean = true,
+    canSwipeWhenCompleted: Boolean = false,
     shape: Shape = RoundedCornerShape(12.dp),
     onDismissed: (() -> Unit)? = null,
-    background: @Composable (progress: Float, thresholdReached: Boolean) -> Unit = { progress, reached ->
-        DefaultSwipeCompleteBackground(progress = progress, thresholdReached = reached, shape = shape)
+    background: @Composable (progress: Float, thresholdReached: Boolean, isSwipingLeft: Boolean) -> Unit = { progress, reached, isLeft ->
+        DefaultSwipeCompleteBackground(
+            progress = progress,
+            thresholdReached = reached,
+            isSwipingLeft = isLeft,
+            shape = shape
+        )
     },
     content: @Composable (progress: Float, isCompleted: Boolean) -> Unit
 ) {
@@ -110,7 +119,9 @@ fun SwipeToCompleteBox(
     }
 
     val currentOffset = animOffsetX.value
-    val swipeProgress = if (isCompleted) 1.0f else (currentOffset / thresholdPx).coerceIn(0f, 1f)
+    val absOffset = abs(currentOffset)
+    val swipeProgress = if (isCompleted && absOffset == 0f) 1.0f else (absOffset / thresholdPx).coerceIn(0f, 1f)
+    val isSwipingLeft = currentOffset < 0f
 
     // Calculate outer container height for freeze-inner morphing
     val measuredHeightDp = with(density) { measuredHeightPx.toDp() }
@@ -140,8 +151,8 @@ fun SwipeToCompleteBox(
                 Modifier.fillMaxWidth()
             }
         ) {
-            // Background revealed under swipe
-            background(swipeProgress, thresholdReached)
+            // Background revealed under swipe (supports both left and right directions)
+            background(swipeProgress, thresholdReached, isSwipingLeft)
 
             // Swiping Foreground Card
             Box(
@@ -149,8 +160,9 @@ fun SwipeToCompleteBox(
                     .fillMaxWidth()
                     .offset { IntOffset(currentOffset.roundToInt(), 0) }
                     .clip(shape)
-                    .pointerInput(enabled, isCompleted, isMorphing) {
-                        if (!enabled || isCompleted || isMorphing) return@pointerInput
+                    .pointerInput(enabled, isCompleted, isMorphing, canSwipeWhenCompleted) {
+                        if (!enabled || isMorphing) return@pointerInput
+                        if (isCompleted && !canSwipeWhenCompleted) return@pointerInput
 
                         detectHorizontalDragGestures(
                             onDragStart = {
@@ -158,18 +170,31 @@ fun SwipeToCompleteBox(
                             },
                             onDragEnd = {
                                 if (thresholdReached) {
+                                    val sign = if (rawDragX >= 0f) 1f else -1f
                                     onComplete()
                                     if (dismissOnComplete) {
                                         isMorphing = true
                                         coroutineScope.launch {
-                                            morphCollapse.animateTo(
-                                                targetValue = 1f,
-                                                animationSpec = tween(
-                                                    durationMillis = resolvedDurZone,
-                                                    easing = FluidMotionTokens.EaseQuint
+                                            // Fly off screen in swipe direction while morphing down height
+                                            launch {
+                                                animOffsetX.animateTo(
+                                                    targetValue = sign * 1500f,
+                                                    animationSpec = tween(
+                                                        durationMillis = 260,
+                                                        easing = FluidMotionTokens.EaseExpo
+                                                    )
                                                 )
-                                            )
-                                            onDismissed?.invoke()
+                                            }
+                                            launch {
+                                                morphCollapse.animateTo(
+                                                    targetValue = 1f,
+                                                    animationSpec = tween(
+                                                        durationMillis = resolvedDurZone,
+                                                        easing = FluidMotionTokens.EaseQuint
+                                                    )
+                                                )
+                                                onDismissed?.invoke()
+                                            }
                                         }
                                     } else {
                                         coroutineScope.launch {
@@ -216,24 +241,26 @@ fun SwipeToCompleteBox(
                                 change.consume()
                                 rawDragX += dragAmount
 
-                                // Non-linear spring damping beyond threshold
-                                val visual = if (rawDragX <= 0f) {
-                                    0f
-                                } else if (rawDragX <= thresholdPx) {
-                                    rawDragX
+                                val absDrag = abs(rawDragX)
+                                val sign = if (rawDragX >= 0f) 1f else -1f
+
+                                // Non-linear spring damping beyond threshold in both directions
+                                val damped = if (absDrag <= thresholdPx) {
+                                    absDrag
                                 } else {
-                                    thresholdPx + (rawDragX - thresholdPx) * 0.32f
+                                    thresholdPx + (absDrag - thresholdPx) * 0.32f
                                 }
+                                val visual = damped * sign
 
                                 coroutineScope.launch {
                                     animOffsetX.snapTo(visual)
                                 }
 
                                 // 64dp haptic click trigger
-                                if (visual >= thresholdPx && !thresholdReached) {
+                                if (damped >= thresholdPx && !thresholdReached) {
                                     thresholdReached = true
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                } else if (visual < thresholdPx && thresholdReached) {
+                                } else if (damped < thresholdPx && thresholdReached) {
                                     thresholdReached = false
                                 }
                             }
@@ -247,19 +274,25 @@ fun SwipeToCompleteBox(
 }
 
 /**
- * Default background for [SwipeToCompleteBox] showing fluid reveal of checkmark indicator.
+ * Default background for [SwipeToCompleteBox] showing fluid reveal of checkmark indicator
+ * on the correct side (left side when swiping right, right side when swiping left).
  */
 @Composable
 fun DefaultSwipeCompleteBackground(
     progress: Float,
     thresholdReached: Boolean,
+    isSwipingLeft: Boolean = false,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(12.dp),
     activeColor: Color = Color(0xFF2E7D32),
-    inactiveColor: Color = Color(0xFF1B221E)
+    inactiveColor: Color = Color(0xFF1B221E),
+    iconSize: Dp = 32.dp,
+    fontSize: androidx.compose.ui.unit.TextUnit = 18.sp,
+    horizontalPadding: Dp = 20.dp
 ) {
     val bgColor = if (thresholdReached) activeColor else inactiveColor
     val checkAlpha = progress.coerceIn(0f, 1f)
+    val alignment = if (isSwipingLeft) Alignment.CenterEnd else Alignment.CenterStart
 
     Box(
         modifier = modifier
@@ -267,12 +300,12 @@ fun DefaultSwipeCompleteBackground(
             .fillMaxHeight()
             .clip(shape)
             .background(bgColor)
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.CenterStart
+            .padding(horizontal = horizontalPadding),
+        contentAlignment = alignment
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(iconSize)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = if (thresholdReached) 0.95f else 0.20f * checkAlpha)),
             contentAlignment = Alignment.Center
@@ -281,7 +314,7 @@ fun DefaultSwipeCompleteBackground(
                 text = "✓",
                 color = if (thresholdReached) activeColor else Color.White.copy(alpha = checkAlpha),
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                fontSize = fontSize
             )
         }
     }

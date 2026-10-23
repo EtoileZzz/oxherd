@@ -137,6 +137,9 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             val stations = uiState.stations
+            var isAddingStationInSettings by remember { mutableStateOf(false) }
+            var newStationNameInSettings by remember { mutableStateOf("") }
+
             if (stations.isNotEmpty()) {
                 val stationNames = stations.map { it.name }
                 val activeStationIndex = stations.indexOfFirst { it.id == currentSettings.activeStationId }
@@ -157,6 +160,107 @@ fun SettingsScreen(
                     contentColor = Color(0xFF8E9AAF),
                     height = 44.dp
                 )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Station Management list
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF141822))
+                        .padding(10.dp)
+                ) {
+                    stations.forEach { st ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = st.name,
+                                color = if (st.id == currentSettings.activeStationId) Color(0xFF8BB5FF) else Color(0xFFB0C4DE),
+                                fontSize = 13.sp,
+                                fontWeight = if (st.id == currentSettings.activeStationId) FontWeight.Bold else FontWeight.Normal
+                            )
+                            if (stations.size > 1) {
+                                Text(
+                                    text = "删除",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFFF5252),
+                                    modifier = Modifier
+                                        .clickable { viewModel.deleteStation(st.id) }
+                                        .padding(4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (isAddingStationInSettings) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = newStationNameInSettings,
+                                onValueChange = { newStationNameInSettings = it },
+                                placeholder = { Text("岗位名称...", fontSize = 12.sp, color = Color(0xFF5A667A)) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF5B8DEF),
+                                    unfocusedBorderColor = Color(0xFF2C3446),
+                                    focusedContainerColor = Color(0xFF1B2230),
+                                    unfocusedContainerColor = Color(0xFF1B2230),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .height(38.dp)
+                                    .flashButton(accentColor = Color(0xFF5B8DEF), cornerRadiusDp = 8.dp) {
+                                        if (newStationNameInSettings.isNotBlank()) {
+                                            viewModel.createStation(newStationNameInSettings.trim())
+                                            newStationNameInSettings = ""
+                                            isAddingStationInSettings = false
+                                        }
+                                    }
+                                    .background(Color(0xFF2563EB), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("添加", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .height(38.dp)
+                                    .clickable { isAddingStationInSettings = false }
+                                    .padding(horizontal = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("取消", fontSize = 12.sp, color = Color(0xFF8E9AAF))
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "+ 添加自定义岗位 / 楼层",
+                            fontSize = 12.sp,
+                            color = Color(0xFF5B8DEF),
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .clickable { isAddingStationInSettings = true }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                }
             } else {
                 Text(
                     text = "当前岗位：${currentSettings.activeStationName}",

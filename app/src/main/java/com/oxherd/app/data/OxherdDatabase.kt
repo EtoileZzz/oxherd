@@ -650,6 +650,187 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             notifyTableChanged("duty_tasks")
         }
 
+    // --- Custom Station, Item, and Sub-Item Mutations ---
+
+    suspend fun insertCheckItem(
+        stationId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?,
+        sortOrder: Int = 0
+    ): Long = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("station_id", stationId)
+            put("title", title.trim())
+            put("is_time_linear", if (isTimeLinear) 1 else 0)
+            put("time_start", timeStart?.trim())
+            put("time_end", timeEnd?.trim())
+            put("is_completed", 0)
+            put("is_exception", 0)
+            put("sort_order", sortOrder)
+        }
+        val id = writableDatabase.insert("check_items", null, values)
+        checkAndUpdateStationCompletion(writableDatabase, stationId)
+        notifyTableChanged("check_items")
+        notifyTableChanged("task_stations")
+        id
+    }
+
+    suspend fun updateCheckItemDetails(
+        itemId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    ) = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("title", title.trim())
+            put("is_time_linear", if (isTimeLinear) 1 else 0)
+            put("time_start", timeStart?.trim())
+            put("time_end", timeEnd?.trim())
+        }
+        writableDatabase.update("check_items", values, "id = ?", arrayOf(itemId.toString()))
+        notifyTableChanged("check_items")
+    }
+
+    suspend fun deleteCheckItem(itemId: Long) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val stationId = queryStationIdForItem(db, itemId)
+            db.delete("sub_items", "parent_id = ?", arrayOf(itemId.toString()))
+            db.delete("check_items", "id = ?", arrayOf(itemId.toString()))
+            if (stationId != null) {
+                checkAndUpdateStationCompletion(db, stationId)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notifyTableChanged("sub_items")
+        notifyTableChanged("check_items")
+        notifyTableChanged("task_stations")
+        notifyTableChanged("duty_tasks")
+    }
+
+    suspend fun insertSubItem(
+        parentId: Long,
+        title: String,
+        sortOrder: Int = 0
+    ): Long = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("parent_id", parentId)
+            put("title", title.trim())
+            put("is_completed", 0)
+            put("sort_order", sortOrder)
+        }
+        val id = writableDatabase.insert("sub_items", null, values)
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val itemValues = ContentValues().apply { put("is_completed", 0) }
+            db.update("check_items", itemValues, "id = ?", arrayOf(parentId.toString()))
+            val stationId = queryStationIdForItem(db, parentId)
+            if (stationId != null) {
+                checkAndUpdateStationCompletion(db, stationId)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notifyTableChanged("sub_items")
+        notifyTableChanged("check_items")
+        notifyTableChanged("task_stations")
+        id
+    }
+
+    suspend fun updateSubItemTitle(subItemId: Long, title: String) = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply { put("title", title.trim()) }
+        writableDatabase.update("sub_items", values, "id = ?", arrayOf(subItemId.toString()))
+        notifyTableChanged("sub_items")
+    }
+
+    suspend fun deleteSubItem(subItemId: Long) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            var parentId: Long? = null
+            db.rawQuery("SELECT parent_id FROM sub_items WHERE id = ?", arrayOf(subItemId.toString()))
+                .use { c -> if (c.moveToFirst()) parentId = c.getLong(0) }
+            db.delete("sub_items", "id = ?", arrayOf(subItemId.toString()))
+            if (parentId != null) {
+                db.rawQuery("SELECT COUNT(*) FROM sub_items WHERE parent_id = ? AND is_completed = 0", arrayOf(parentId.toString()))
+                    .use { c ->
+                        val uncompleted = if (c.moveToFirst()) c.getInt(0) else 0
+                        val allValues = ContentValues().apply {
+                            put("is_completed", if (uncompleted == 0) 1 else 0)
+                        }
+                        db.update("check_items", allValues, "id = ?", arrayOf(parentId.toString()))
+                    }
+                val stationId = queryStationIdForItem(db, parentId)
+                if (stationId != null) {
+                    checkAndUpdateStationCompletion(db, stationId)
+                }
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notifyTableChanged("sub_items")
+        notifyTableChanged("check_items")
+        notifyTableChanged("task_stations")
+        notifyTableChanged("duty_tasks")
+    }
+
+    suspend fun insertStation(taskId: Long, name: String, sortOrder: Int = 0): Long = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("task_id", taskId)
+            put("name", name.trim())
+            put("sort_order", sortOrder)
+            put("is_completed", 0)
+        }
+        val id = writableDatabase.insert("task_stations", null, values)
+        checkAndUpdateTaskCompletion(writableDatabase, taskId)
+        notifyTableChanged("task_stations")
+        notifyTableChanged("duty_tasks")
+        id
+    }
+
+    suspend fun updateStationName(stationId: Long, name: String) = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply { put("name", name.trim()) }
+        writableDatabase.update("task_stations", values, "id = ?", arrayOf(stationId.toString()))
+        notifyTableChanged("task_stations")
+    }
+
+    suspend fun deleteStation(stationId: Long) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            var taskId: Long? = null
+            db.rawQuery("SELECT task_id FROM task_stations WHERE id = ?", arrayOf(stationId.toString()))
+                .use { c -> if (c.moveToFirst()) taskId = c.getLong(0) }
+
+            db.execSQL(
+                "DELETE FROM sub_items WHERE parent_id IN (SELECT id FROM check_items WHERE station_id = ?)",
+                arrayOf(stationId.toString())
+            )
+            db.delete("check_items", "station_id = ?", arrayOf(stationId.toString()))
+            db.delete("task_stations", "id = ?", arrayOf(stationId.toString()))
+
+            if (taskId != null) {
+                checkAndUpdateTaskCompletion(db, taskId)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notifyTableChanged("sub_items")
+        notifyTableChanged("check_items")
+        notifyTableChanged("task_stations")
+        notifyTableChanged("duty_tasks")
+    }
+
     private fun queryStationIdForItem(db: SQLiteDatabase, itemId: Long): Long? {
         db.rawQuery("SELECT station_id FROM check_items WHERE id = ?", arrayOf(itemId.toString()))
             .use { cursor ->

@@ -87,4 +87,37 @@ class DutyDataTest {
         val nextDate = baseDate.plusWeeks(1)
         assertEquals(LocalDate.of(2026, 10, 29), nextDate)
     }
+
+    @Test
+    fun testCustomCheckItemAndSubItemMutationModels() {
+        val customStation = TaskStation(
+            id = 99L,
+            taskId = 1L,
+            name = "B1配电房",
+            sortOrder = 9,
+            isCompleted = false
+        )
+        val customItem = CheckItem(
+            id = 501L,
+            stationId = customStation.id,
+            title = "检查变压器运行仪表",
+            isTimeLinear = false,
+            sortOrder = 1
+        )
+        val customSub = SubItem(
+            id = 901L,
+            parentId = customItem.id,
+            title = "记录三相电压是否在380V±5%",
+            isCompleted = false,
+            sortOrder = 1
+        )
+
+        assertEquals(99L, customStation.id)
+        assertEquals("B1配电房", customStation.name)
+        assertEquals(501L, customItem.id)
+        assertFalse(customItem.isTimeLinear)
+        assertEquals(901L, customSub.id)
+        assertEquals(501L, customSub.parentId)
+        assertFalse(customSub.isCompleted)
+    }
 }

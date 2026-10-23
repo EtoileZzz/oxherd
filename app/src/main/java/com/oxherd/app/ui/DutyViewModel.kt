@@ -193,6 +193,107 @@ class DutyViewModel(
         }
     }
 
+    // --- Dynamic Customization: CheckItem Operations ---
+
+    fun createCheckItem(
+        stationId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    ) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            repository.createCheckItem(
+                stationId = stationId,
+                title = title.trim(),
+                isTimeLinear = isTimeLinear,
+                timeStart = timeStart?.trim()?.ifBlank { null },
+                timeEnd = timeEnd?.trim()?.ifBlank { null }
+            )
+        }
+    }
+
+    fun updateCheckItem(
+        itemId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    ) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            repository.updateCheckItem(
+                itemId = itemId,
+                title = title.trim(),
+                isTimeLinear = isTimeLinear,
+                timeStart = timeStart?.trim()?.ifBlank { null },
+                timeEnd = timeEnd?.trim()?.ifBlank { null }
+            )
+        }
+    }
+
+    fun deleteCheckItem(itemId: Long) {
+        viewModelScope.launch {
+            repository.deleteCheckItem(itemId)
+        }
+    }
+
+    // --- Dynamic Customization: SubItem Operations ---
+
+    fun createSubItem(parentId: Long, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            repository.createSubItem(parentId = parentId, title = title.trim())
+        }
+    }
+
+    fun updateSubItem(subItemId: Long, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            repository.updateSubItem(subItemId = subItemId, title = title.trim())
+        }
+    }
+
+    fun deleteSubItem(subItemId: Long) {
+        viewModelScope.launch {
+            repository.deleteSubItem(subItemId)
+        }
+    }
+
+    // --- Dynamic Customization: Station Operations ---
+
+    fun createStation(name: String) {
+        val taskId = uiState.value.activeTask?.id ?: return
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val newStationId = repository.createStation(taskId = taskId, name = name.trim())
+            repository.updateActiveStation(newStationId, name.trim())
+        }
+    }
+
+    fun updateStation(stationId: Long, name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            repository.updateStation(stationId, name.trim())
+            if (uiState.value.currentStation?.id == stationId) {
+                repository.updateActiveStation(stationId, name.trim())
+            }
+        }
+    }
+
+    fun deleteStation(stationId: Long) {
+        viewModelScope.launch {
+            val currentStations = uiState.value.stations
+            val remaining = currentStations.filter { it.id != stationId }
+            repository.deleteStation(stationId)
+            val nextStation = remaining.firstOrNull()
+            if (nextStation != null) {
+                repository.updateActiveStation(nextStation.id, nextStation.name)
+            }
+        }
+    }
+
     fun confirmAndArchive(context: Context, onArchived: (zipPath: String) -> Unit) {
         val taskId = uiState.value.activeTask?.id ?: return
         viewModelScope.launch {

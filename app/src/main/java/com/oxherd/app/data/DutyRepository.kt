@@ -70,6 +70,48 @@ interface DutyRepository {
     /** Cancels pre-shift reminder alarm. */
     fun cancelTaskAlarm(taskId: Long)
 
+    // --- Dynamic Customization: Check Items CRUD ---
+    suspend fun createCheckItem(
+        stationId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?,
+        sortOrder: Int = 0
+    ): Long
+
+    suspend fun updateCheckItem(
+        itemId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    )
+
+    suspend fun deleteCheckItem(itemId: Long)
+
+    // --- Dynamic Customization: Sub-Items CRUD ---
+    suspend fun createSubItem(
+        parentId: Long,
+        title: String,
+        sortOrder: Int = 0
+    ): Long
+
+    suspend fun updateSubItem(subItemId: Long, title: String)
+
+    suspend fun deleteSubItem(subItemId: Long)
+
+    // --- Dynamic Customization: Stations CRUD ---
+    suspend fun createStation(
+        taskId: Long,
+        name: String,
+        sortOrder: Int = 0
+    ): Long
+
+    suspend fun updateStation(stationId: Long, name: String)
+
+    suspend fun deleteStation(stationId: Long)
+
     companion object {
         fun getInstance(context: Context): DutyRepository = DefaultDutyRepository.getInstance(context)
     }
@@ -135,6 +177,50 @@ class DefaultDutyRepository(
 
     override fun cancelTaskAlarm(taskId: Long) =
         alarmScheduler.cancelPreShiftAlarm(taskId)
+
+    override suspend fun createCheckItem(
+        stationId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?,
+        sortOrder: Int
+    ): Long = database.insertCheckItem(stationId, title, isTimeLinear, timeStart, timeEnd, sortOrder)
+
+    override suspend fun updateCheckItem(
+        itemId: Long,
+        title: String,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    ) = database.updateCheckItemDetails(itemId, title, isTimeLinear, timeStart, timeEnd)
+
+    override suspend fun deleteCheckItem(itemId: Long) =
+        database.deleteCheckItem(itemId)
+
+    override suspend fun createSubItem(
+        parentId: Long,
+        title: String,
+        sortOrder: Int
+    ): Long = database.insertSubItem(parentId, title, sortOrder)
+
+    override suspend fun updateSubItem(subItemId: Long, title: String) =
+        database.updateSubItemTitle(subItemId, title)
+
+    override suspend fun deleteSubItem(subItemId: Long) =
+        database.deleteSubItem(subItemId)
+
+    override suspend fun createStation(
+        taskId: Long,
+        name: String,
+        sortOrder: Int
+    ): Long = database.insertStation(taskId, name, sortOrder)
+
+    override suspend fun updateStation(stationId: Long, name: String) =
+        database.updateStationName(stationId, name)
+
+    override suspend fun deleteStation(stationId: Long) =
+        database.deleteStation(stationId)
 
     override suspend fun archiveAndResetForNextCycle(taskId: Long): String = withContext(Dispatchers.IO) {
         val taskWithHierarchy = database.getTaskWithStations(taskId)
