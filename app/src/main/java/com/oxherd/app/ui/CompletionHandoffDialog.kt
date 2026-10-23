@@ -85,13 +85,13 @@ fun CompletionHandoffDialog(
     val perfLevel = LocalPerfLevel.current
     val motionScale = LocalMotionScale.current
 
-    val animScale = remember { Animatable(if (perfLevel.allows3D) 0.92f else 0.96f) }
+    val animScale = remember { Animatable(0.94f) }
     val animAlpha = remember { Animatable(0f) }
     var isArchiving by remember { mutableStateOf(false) }
     var isDrawerExpanded by remember { mutableStateOf(false) }
 
     val resolvedDur = remember(perfLevel, motionScale) {
-        perfLevel.degradeDuration(FluidMotionTokens.DUR_DIALOG_IN, motionScale)
+        perfLevel.degradeDuration(420, motionScale)
     }
 
     LaunchedEffect(Unit) {
@@ -103,7 +103,7 @@ fun CompletionHandoffDialog(
     }
     LaunchedEffect(Unit) {
         if (resolvedDur > 0) {
-            animScale.animateTo(1f, tween(resolvedDur, easing = FluidMotionTokens.EaseBack))
+            animScale.animateTo(1f, tween(resolvedDur, easing = FluidMotionTokens.EaseTile))
         } else {
             animScale.snapTo(1f)
         }

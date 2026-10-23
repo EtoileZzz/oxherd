@@ -115,6 +115,32 @@ interface DutyRepository {
 
     suspend fun deleteStation(stationId: Long)
 
+    // --- Check Items Ordering & Timing Mutations ---
+    suspend fun getAllCheckItemsByStation(stationId: Long): List<CheckItem>
+
+    suspend fun swapCheckItemSortOrder(firstId: Long, secondId: Long)
+
+    suspend fun updateCheckItemSortOrder(itemId: Long, newOrder: Int)
+
+    suspend fun updateCheckItemTiming(
+        itemId: Long,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    )
+
+    // --- Configuration Import & Export ---
+    suspend fun exportDutyConfigJson(): String
+
+    suspend fun importDutyConfig(
+        dutyTask: DutyTask,
+        stations: List<TaskStation>,
+        items: List<CheckItem>,
+        subItems: List<SubItem>
+    )
+
+    suspend fun importDutyConfig(config: DutyConfigExport)
+
     companion object {
         fun getInstance(context: Context): DutyRepository = DefaultDutyRepository.getInstance(context)
     }
@@ -227,6 +253,46 @@ class DefaultDutyRepository(
 
     override suspend fun deleteStation(stationId: Long) =
         database.deleteStation(stationId)
+
+    override suspend fun getAllCheckItemsByStation(stationId: Long): List<CheckItem> =
+        database.getAllCheckItemsByStation(stationId)
+
+    override suspend fun swapCheckItemSortOrder(firstId: Long, secondId: Long) =
+        database.swapCheckItemSortOrder(firstId, secondId)
+
+    override suspend fun updateCheckItemSortOrder(itemId: Long, newOrder: Int) =
+        database.updateCheckItemSortOrder(itemId, newOrder)
+
+    override suspend fun updateCheckItemTiming(
+        itemId: Long,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    ) = database.updateCheckItemTiming(itemId, isTimeLinear, timeStart, timeEnd)
+
+    override suspend fun exportDutyConfigJson(): String = withContext(Dispatchers.IO) {
+        val activeTask = database.getActiveTask()
+            ?: throw IllegalStateException("No active duty task found for export")
+        val taskWithHierarchy = database.getTaskWithStations(activeTask.id)
+            ?: throw IllegalStateException("Hierarchy not found for task ${activeTask.id}")
+        val stations = taskWithHierarchy.stations.map { it.station }
+        val items = taskWithHierarchy.stations.flatMap { it.items.map { ci -> ci.item } }
+        val subItems = taskWithHierarchy.stations.flatMap { it.items.flatMap { ci -> ci.subItems } }
+        DutyConfigManager.exportConfigToJson(taskWithHierarchy.task, stations, items, subItems)
+    }
+
+    override suspend fun importDutyConfig(
+        dutyTask: DutyTask,
+        stations: List<TaskStation>,
+        items: List<CheckItem>,
+        subItems: List<SubItem>
+    ) {
+        database.importDutyConfig(dutyTask, stations, items, subItems)
+    }
+
+    override suspend fun importDutyConfig(config: DutyConfigExport) {
+        database.importDutyConfig(config.task, config.stations, config.items, config.subItems)
+    }
 
     override suspend fun archiveAndResetForNextCycle(taskId: Long): String = withContext(Dispatchers.IO) {
         val taskWithHierarchy = database.getTaskWithStations(taskId)

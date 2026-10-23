@@ -10,6 +10,12 @@ package com.oxherd.app.data
  * @property defaultHandoffUrl Default handover destination URL / webhook
  * @property defaultHandoffApp Default quick-share app package name (default "com.tencent.tim")
  * @property themeMode Application visual theme mode: "SYSTEM", "LIGHT", "DARK"
+ * @property notifyEnabled Master switch for pre-shift reminders
+ * @property notifyAdvanceMinutes Advance minutes for duty alert (5, 10, 15, 30, 60)
+ * @property notifySound Play audible notification sound
+ * @property notifyVibrate Trigger vibration on alert
+ * @property notifySlotStart Additional reminder at time slot boundaries
+ * @property autoRestoreOnBoot Automatically reschedule alarms when device reboots
  */
 data class UserSettings(
     val activeStationId: Long = 1L,
@@ -18,7 +24,13 @@ data class UserSettings(
     val motionScale: Float = 1.0f,
     val defaultHandoffUrl: String = "",
     val defaultHandoffApp: String = "com.tencent.tim",
-    val themeMode: String = ThemeMode.SYSTEM
+    val themeMode: String = ThemeMode.SYSTEM,
+    val notifyEnabled: Boolean = true,
+    val notifyAdvanceMinutes: Int = 15,
+    val notifySound: Boolean = true,
+    val notifyVibrate: Boolean = true,
+    val notifySlotStart: Boolean = true,
+    val autoRestoreOnBoot: Boolean = true
 )
 
 object PerfLevel {

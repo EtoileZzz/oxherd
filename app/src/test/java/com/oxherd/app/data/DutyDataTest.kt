@@ -124,7 +124,7 @@ class DutyDataTest {
 
     @Test
     fun testDatabaseConstantsAndThemeModeSupport() {
-        assertEquals(2, OxherdDatabase.DATABASE_VERSION)
+        assertEquals(3, OxherdDatabase.DATABASE_VERSION)
         assertEquals("oxherd.db", OxherdDatabase.DATABASE_NAME)
         assertEquals("SYSTEM", ThemeMode.SYSTEM)
         assertEquals("LIGHT", ThemeMode.LIGHT)
@@ -132,6 +132,12 @@ class DutyDataTest {
 
         val settings = UserSettings()
         assertEquals(ThemeMode.SYSTEM, settings.themeMode)
+        assertTrue(settings.notifyEnabled)
+        assertEquals(15, settings.notifyAdvanceMinutes)
+        assertTrue(settings.notifySound)
+        assertTrue(settings.notifyVibrate)
+        assertTrue(settings.notifySlotStart)
+        assertTrue(settings.autoRestoreOnBoot)
 
         val darkSettings = settings.copy(themeMode = ThemeMode.DARK)
         assertEquals("DARK", darkSettings.themeMode)

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -274,6 +275,65 @@ fun Modifier.fluidTemporalShift(stationId: Long): Modifier = composed {
                         )
                     )
                 }
+            }
+        }
+    }
+
+    this.graphicsLayer {
+        translationX = animOffsetX.value.dp.toPx()
+        this.alpha = animAlpha.value
+    }
+}
+
+/**
+ * Tab switching direction-aware shift:
+ * When switching to tab 1, contents slide in from +24dp with EaseQuint 340ms;
+ * When switching back to tab 0, slide in from -24dp.
+ */
+fun Modifier.fluidTabShift(selectedTab: Int): Modifier = composed {
+    val perfLevel = LocalPerfLevel.current
+    val motionScale = LocalMotionScale.current
+    val duration = remember(perfLevel, motionScale) {
+        perfLevel.degradeDuration(340, motionScale)
+    }
+
+    var previousTab by remember { mutableIntStateOf(selectedTab) }
+    val animOffsetX = remember { Animatable(0f) }
+    val animAlpha = remember { Animatable(1f) }
+
+    LaunchedEffect(selectedTab) {
+        if (selectedTab != previousTab) {
+            val direction = if (selectedTab > previousTab) 1f else -1f
+            previousTab = selectedTab
+
+            if (duration > 0) {
+                // Direction-aware start offset: tab 1 from +24dp, tab 0 from -24dp
+                animOffsetX.snapTo(24f * direction)
+                animAlpha.snapTo(0.35f)
+
+                coroutineScope {
+                    launch {
+                        animAlpha.animateTo(
+                            targetValue = 1f,
+                            animationSpec = tween(
+                                durationMillis = duration,
+                                easing = FluidMotionTokens.EaseQuint
+                            )
+                        )
+                    }
+                    launch {
+                        animOffsetX.animateTo(
+                            targetValue = 0f,
+                            animationSpec = tween(
+                                durationMillis = duration,
+                                easing = FluidMotionTokens.EaseQuint
+                            )
+                        )
+                    }
+                }
+            } else {
+                animOffsetX.snapTo(0f)
+                animAlpha.snapTo(1f)
             }
         }
     }

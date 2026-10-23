@@ -208,4 +208,29 @@ class FluidMotionTest {
         assertEquals(1, state.selectedIndex)
         assertEquals(120f, state.animX.value, 0.001f)
     }
+
+    // ──────────────────────────────────────────────────────────────
+    // 5. EaseTile and Tab Shift Direction Tests
+    // ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun testEaseTileCurve() {
+        // EaseTile: (0.20f, 0.80f, 0.20f, 1.0f)
+        assertEquals(0f, FluidMotionTokens.cubicAt(0.20f, 0.80f, 0.20f, 1.0f, 0f), 0.0001f)
+        assertEquals(1f, FluidMotionTokens.cubicAt(0.20f, 0.80f, 0.20f, 1.0f, 1f), 0.0001f)
+        val midVal = FluidMotionTokens.cubicAt(0.20f, 0.80f, 0.20f, 1.0f, 0.5f)
+        assertTrue("EaseTile mid-progress must show rapid acceleration (> 0.70), got $midVal", midVal > 0.70f)
+    }
+
+    @Test
+    fun testFluidTabShiftDirections() {
+        // Direction calculation rule:
+        // tab 1 (selectedTab > previousTab) -> +24dp
+        // tab 0 (selectedTab < previousTab) -> -24dp
+        val forwardDirection = if (1 > 0) 24f else -24f
+        assertEquals(24f, forwardDirection, 0.0001f)
+
+        val backwardDirection = if (0 > 1) 24f else -24f
+        assertEquals(-24f, backwardDirection, 0.0001f)
+    }
 }

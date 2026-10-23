@@ -8,8 +8,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.oxherd.app.data.CheckItemWithSubItems
+import com.oxherd.app.data.DutyConfigExport
+import com.oxherd.app.data.DutyConfigManager
 import com.oxherd.app.data.DutyRepository
 import com.oxherd.app.data.DutyTask
+import com.oxherd.app.data.KeepAliveHelper
 import com.oxherd.app.data.TaskStation
 import com.oxherd.app.data.UserSettings
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -233,10 +236,75 @@ class DutyViewModel(
         }
     }
 
+    fun getItemsForStation(stationId: Long): kotlinx.coroutines.flow.Flow<List<com.oxherd.app.data.CheckItem>> =
+        repository.getItemsForStation(stationId)
+
     fun deleteCheckItem(itemId: Long) {
         viewModelScope.launch {
             repository.deleteCheckItem(itemId)
         }
+    }
+
+    fun swapCheckItemSortOrder(firstId: Long, secondId: Long) {
+        viewModelScope.launch {
+            repository.swapCheckItemSortOrder(firstId, secondId)
+        }
+    }
+
+    fun updateCheckItemSortOrder(itemId: Long, newOrder: Int) {
+        viewModelScope.launch {
+            repository.updateCheckItemSortOrder(itemId, newOrder)
+        }
+    }
+
+    fun updateCheckItemTiming(
+        itemId: Long,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    ) {
+        viewModelScope.launch {
+            repository.updateCheckItemTiming(itemId, isTimeLinear, timeStart, timeEnd)
+        }
+    }
+
+    fun exportDutyConfigJson(onReady: (jsonStr: String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val json = repository.exportDutyConfigJson()
+                onReady(json)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun shareDutyConfig(context: Context) {
+        viewModelScope.launch {
+            try {
+                val json = repository.exportDutyConfigJson()
+                val shareIntent = DutyConfigManager.createShareIntent(context, json)
+                context.startActivity(shareIntent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun importDutyConfig(config: DutyConfigExport, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.importDutyConfig(config)
+                onComplete(true)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onComplete(false)
+            }
+        }
+    }
+
+    fun sendTestNotification(context: Context) {
+        KeepAliveHelper.sendTestNotification(context, uiState.value.userSettings)
     }
 
     // --- Dynamic Customization: SubItem Operations ---

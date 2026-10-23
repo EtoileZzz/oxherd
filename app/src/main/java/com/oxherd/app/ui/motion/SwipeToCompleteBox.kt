@@ -163,7 +163,19 @@ fun SwipeToCompleteBox(
             }
         ) {
             // Background revealed under swipe (supports both left and right directions)
-            background(swipeProgress, thresholdReached, isSwipingLeft)
+            // Strictly guard against corner leakage: when abs(currentOffset) < 0.5f (static state),
+            // the background Reveal layer is not rendered. Inset padding of 0.5.dp and shape clipping
+            // ensure the background is strictly inside the foreground card bounds.
+            if (absOffset >= 0.5f) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding(0.5.dp)
+                        .clip(shape)
+                ) {
+                    background(swipeProgress, thresholdReached, isSwipingLeft)
+                }
+            }
 
             // Swiping Foreground Card
             Box(
@@ -313,6 +325,7 @@ fun DefaultSwipeCompleteBackground(
     fontSize: androidx.compose.ui.unit.TextUnit = 18.sp,
     horizontalPadding: Dp = 20.dp
 ) {
+    if (progress <= 0f) return
     val bgColor = if (thresholdReached) activeColor else inactiveColor
     val checkAlpha = progress.coerceIn(0f, 1f)
     val alignment = if (isSwipingLeft) Alignment.CenterEnd else Alignment.CenterStart

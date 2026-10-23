@@ -16,9 +16,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,9 +58,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +76,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.oxherd.app.data.CheckItem
 import com.oxherd.app.data.CheckItemWithSubItems
@@ -80,13 +85,16 @@ import com.oxherd.app.data.TaskStation
 import com.oxherd.app.theme.LocalOxherdColors
 import com.oxherd.app.ui.motion.DefaultSwipeCompleteBackground
 import com.oxherd.app.ui.motion.FluidMotionTokens
+import com.oxherd.app.ui.motion.SlidePillSegmentedControl
 import com.oxherd.app.ui.motion.StrikethroughText
 import com.oxherd.app.ui.motion.SwipeToCompleteBox
 import com.oxherd.app.ui.motion.flashButton
 import com.oxherd.app.ui.motion.fluidListInItem
+import com.oxherd.app.ui.motion.fluidTabShift
 import com.oxherd.app.ui.motion.fluidTemporalShift
 import com.oxherd.app.ui.motion.fluidViewInContent
 import com.oxherd.app.ui.motion.fluidViewInHeader
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -129,6 +137,46 @@ fun TaskDetailScreen(
     }
     val completedItems = remember(uiState.linearItems, uiState.nonLinearItems) {
         (uiState.linearItems + uiState.nonLinearItems).filter { it.item.isCompleted }
+    }
+
+    // Segmented Slider Switch State: 0 = ⏱️ 时段巡查, 1 = 📋 常规待办
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
+    // Direct Camera Launch Support
+    var pendingCameraItemId by remember { mutableStateOf<Long?>(null) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            val itemId = pendingCameraItemId
+            val uri = pendingCameraUri
+            if (itemId != null && uri != null) {
+                val uriStr = uri.toString()
+                viewModel.recordEvidence(itemId, uriStr, null, false)
+                Toast.makeText(context, "📸 现场存证照片已记录", Toast.LENGTH_SHORT).show()
+            }
+        }
+        pendingCameraItemId = null
+        pendingCameraUri = null
+    }
+
+    val onDirectCameraLaunch: (Long) -> Unit = { itemId ->
+        try {
+            val photosDir = File(context.filesDir, "photos").apply {
+                if (!exists()) mkdirs()
+            }
+            val photoFile = File(photosDir, "evidence_${itemId}_${System.currentTimeMillis()}.jpg")
+            val photoUri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                photoFile
+            )
+            pendingCameraItemId = itemId
+            pendingCameraUri = photoUri
+            cameraLauncher.launch(photoUri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "无法启动相机: ${e.localizedMessage ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     val taskTitle = uiState.activeTask?.title ?: "我的值班任务"
@@ -307,118 +355,207 @@ fun TaskDetailScreen(
                 }
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // SlidePill Segmented Switch for 时段巡查 vs 常规待办
+            SlidePillSegmentedControl(
+                items = listOf(
+                    "⏱️ 时段巡查 (${activeLinearItems.size})",
+                    "📋 常规待办 (${activeNonLinearItems.size})"
+                ),
+                selectedIndex = selectedTab,
+                onItemSelected = { selectedTab = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                containerColor = colors.surfaceVariant,
+                pillColor = colors.accent,
+                contentColor = colors.textSecondary,
+                activeContentColor = Color.White
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             // ── Checklist Items Scrollable List (Fluid Motion Scenes 4, 5, 6) ──
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .fluidViewInContent()
                     .fluidTemporalShift(uiState.currentStation?.id ?: 0L)
+                    .fluidTabShift(selectedTab)
                     .padding(horizontal = 16.dp)
             ) {
-                // Section 1: ⏱️ Time-Linear Section
-                if (activeLinearItems.isNotEmpty()) {
-                    item {
-                        SectionHeader(
-                            icon = "⏱️",
-                            title = "时段巡查",
-                            subtitle = "到达预定时段执行，左右滑动皆可划去完成",
-                            colors = colors
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
+                // Tab 0: ⏱️ Time-Linear Section
+                if (selectedTab == 0) {
+                    if (activeLinearItems.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                icon = "⏱️",
+                                title = "时段巡查",
+                                subtitle = "到达预定时段执行，左右滑动皆可划去完成",
+                                colors = colors
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
 
-                    itemsIndexed(activeLinearItems, key = { _, itemWithSubs -> itemWithSubs.item.id }) { index, itemWithSubs ->
-                        val isExpanded = expandedItems[itemWithSubs.item.id] ?: true
-                        CheckItemCard(
-                            itemWithSubs = itemWithSubs,
-                            isExpanded = isExpanded,
-                            onToggleExpand = {
-                                expandedItems[itemWithSubs.item.id] = !isExpanded
-                            },
-                            onSwipeComplete = {
-                                viewModel.toggleCheckItem(itemWithSubs.item.id, true)
-                            },
-                            onToggleSubItem = { subId, isCompleted ->
-                                viewModel.toggleSubItem(subId, isCompleted)
-                            },
-                            onAddSubItem = { subTitle ->
-                                viewModel.createSubItem(itemWithSubs.item.id, subTitle)
-                            },
-                            onDeleteSubItem = { subId ->
-                                viewModel.deleteSubItem(subId)
-                            },
-                            onOpenEvidence = {
-                                selectedItemForEvidence = itemWithSubs.item
-                            },
-                            onEditItem = {
-                                itemToEdit = itemWithSubs.item
-                            },
-                            onDeleteItem = {
-                                itemToDelete = itemWithSubs.item
-                            },
-                            modifier = Modifier.fluidListInItem(index, isInitialLoad)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-                }
-
-                // Section 2: 📋 Non-Linear Routine Section
-                if (activeNonLinearItems.isNotEmpty()) {
-                    item {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        SectionHeader(
-                            icon = "📋",
-                            title = "常规待办",
-                            subtitle = "值班期间随时可巡查，支持左右滑动快速划去",
-                            colors = colors
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-
-                    itemsIndexed(activeNonLinearItems, key = { _, itemWithSubs -> itemWithSubs.item.id }) { index, itemWithSubs ->
-                        val isExpanded = expandedItems[itemWithSubs.item.id] ?: true
-                        CheckItemCard(
-                            itemWithSubs = itemWithSubs,
-                            isExpanded = isExpanded,
-                            onToggleExpand = {
-                                expandedItems[itemWithSubs.item.id] = !isExpanded
-                            },
-                            onSwipeComplete = {
-                                viewModel.toggleCheckItem(itemWithSubs.item.id, true)
-                            },
-                            onToggleSubItem = { subId, isCompleted ->
-                                viewModel.toggleSubItem(subId, isCompleted)
-                            },
-                            onAddSubItem = { subTitle ->
-                                viewModel.createSubItem(itemWithSubs.item.id, subTitle)
-                            },
-                            onDeleteSubItem = { subId ->
-                                viewModel.deleteSubItem(subId)
-                            },
-                            onOpenEvidence = {
-                                selectedItemForEvidence = itemWithSubs.item
-                            },
-                            onEditItem = {
-                                itemToEdit = itemWithSubs.item
-                            },
-                            onDeleteItem = {
-                                itemToDelete = itemWithSubs.item
-                            },
-                            modifier = Modifier.fluidListInItem(index, isInitialLoad)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-                }
-
-                // Clean Slate / Empty State
-                if (activeLinearItems.isEmpty() && activeNonLinearItems.isEmpty()) {
-                    item {
-                        if (completedItems.isEmpty()) {
-                            // Initial Clean Slate Empty State
+                        itemsIndexed(activeLinearItems, key = { _, itemWithSubs -> itemWithSubs.item.id }) { index, itemWithSubs ->
+                            val isExpanded = expandedItems[itemWithSubs.item.id] ?: true
+                            CheckItemCard(
+                                itemWithSubs = itemWithSubs,
+                                isExpanded = isExpanded,
+                                onToggleExpand = {
+                                    expandedItems[itemWithSubs.item.id] = !isExpanded
+                                },
+                                onSwipeComplete = {
+                                    viewModel.toggleCheckItem(itemWithSubs.item.id, true)
+                                },
+                                onToggleSubItem = { subId, isCompleted ->
+                                    viewModel.toggleSubItem(subId, isCompleted)
+                                },
+                                onAddSubItem = { subTitle ->
+                                    viewModel.createSubItem(itemWithSubs.item.id, subTitle)
+                                },
+                                onDeleteSubItem = { subId ->
+                                    viewModel.deleteSubItem(subId)
+                                },
+                                onOpenEvidence = {
+                                    selectedItemForEvidence = itemWithSubs.item
+                                },
+                                onDirectCamera = {
+                                    onDirectCameraLaunch(itemWithSubs.item.id)
+                                },
+                                onEditItem = {
+                                    itemToEdit = itemWithSubs.item
+                                },
+                                onDeleteItem = {
+                                    itemToDelete = itemWithSubs.item
+                                },
+                                modifier = Modifier.fluidListInItem(index, isInitialLoad)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                    } else {
+                        // Elegant Empty State Card for 时段巡查
+                        item {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 24.dp)
+                                    .padding(vertical = 20.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(colors.surface)
+                                    .border(1.dp, colors.border, RoundedCornerShape(16.dp))
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.accentContainer),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("⏱️", fontSize = 28.sp)
+                                    }
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Text(
+                                        text = "暂无时段巡查项目",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "按时段计划（如 20:00-20:30）执行的巡检项将在此展示。\n到达设定时段会有高光指引，支持左右滑动快速完成。",
+                                        fontSize = 12.sp,
+                                        color = colors.textSecondary,
+                                        lineHeight = 18.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(18.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(44.dp)
+                                            .flashButton(accentColor = colors.accent, cornerRadiusDp = 12.dp) {
+                                                isCreatingNewItem = true
+                                            }
+                                            .background(colors.accent, RoundedCornerShape(12.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("＋", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "添加时段巡查项目",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Tab 1: 📋 Non-Linear Routine Section
+                if (selectedTab == 1) {
+                    if (activeNonLinearItems.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                icon = "📋",
+                                title = "常规待办",
+                                subtitle = "值班期间随时可巡查，支持左右滑动快速划去",
+                                colors = colors
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+
+                        itemsIndexed(activeNonLinearItems, key = { _, itemWithSubs -> itemWithSubs.item.id }) { index, itemWithSubs ->
+                            val isExpanded = expandedItems[itemWithSubs.item.id] ?: true
+                            CheckItemCard(
+                                itemWithSubs = itemWithSubs,
+                                isExpanded = isExpanded,
+                                onToggleExpand = {
+                                    expandedItems[itemWithSubs.item.id] = !isExpanded
+                                },
+                                onSwipeComplete = {
+                                    viewModel.toggleCheckItem(itemWithSubs.item.id, true)
+                                },
+                                onToggleSubItem = { subId, isCompleted ->
+                                    viewModel.toggleSubItem(subId, isCompleted)
+                                },
+                                onAddSubItem = { subTitle ->
+                                    viewModel.createSubItem(itemWithSubs.item.id, subTitle)
+                                },
+                                onDeleteSubItem = { subId ->
+                                    viewModel.deleteSubItem(subId)
+                                },
+                                onOpenEvidence = {
+                                    selectedItemForEvidence = itemWithSubs.item
+                                },
+                                onDirectCamera = {
+                                    onDirectCameraLaunch(itemWithSubs.item.id)
+                                },
+                                onEditItem = {
+                                    itemToEdit = itemWithSubs.item
+                                },
+                                onDeleteItem = {
+                                    itemToDelete = itemWithSubs.item
+                                },
+                                modifier = Modifier.fluidListInItem(index, isInitialLoad)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+                    } else {
+                        // Elegant Empty State Card for 常规待办
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 20.dp)
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(colors.surface)
                                     .border(1.dp, colors.border, RoundedCornerShape(16.dp))
@@ -437,14 +574,14 @@ fun TaskDetailScreen(
                                     }
                                     Spacer(modifier = Modifier.height(14.dp))
                                     Text(
-                                        text = "当前岗位暂无巡查项目",
+                                        text = "暂无常规待办项目",
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = colors.textPrimary
                                     )
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text(
-                                        text = "岗位「${stationName}」尚未设置检查条目。\n支持自由编排时段巡查（按时间先后推进）与常规待办，并随时添加细分子条目。",
+                                        text = "值班期间随时可巡查的例行条目将在此展示。\n支持左右滑动划去完成，并可随时添加细分子条目。",
                                         fontSize = 12.sp,
                                         color = colors.textSecondary,
                                         lineHeight = 18.sp,
@@ -454,7 +591,7 @@ fun TaskDetailScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(46.dp)
+                                            .height(44.dp)
                                             .flashButton(accentColor = colors.accent, cornerRadiusDp = 12.dp) {
                                                 isCreatingNewItem = true
                                             }
@@ -462,54 +599,25 @@ fun TaskDetailScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("＋", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Text("＋", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                text = "添加第一个巡查项目",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
+                                                text = "添加常规待办项目",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
                                                 color = Color.White
                                             )
                                         }
                                     }
                                 }
                             }
-                        } else {
-                            // All items completed
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 24.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(colors.surface)
-                                    .border(1.dp, colors.border, RoundedCornerShape(16.dp))
-                                    .padding(20.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(text = "🎉", fontSize = 36.sp)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = "当前岗位所有项目已全部巡检完毕！",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.textPrimary
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "请点击上方「交班结算」完成归档，或点击下方继续添加新条目",
-                                        fontSize = 12.sp,
-                                        color = colors.textSecondary,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
                         }
                     }
                 }
 
-                // Add New Check Item Action Row (when items exist)
-                if (activeLinearItems.isNotEmpty() || activeNonLinearItems.isNotEmpty() || completedItems.isNotEmpty()) {
+                // Add New Check Item Action Row (when items exist in selected tab)
+                val currentTabHasItems = if (selectedTab == 0) activeLinearItems.isNotEmpty() else activeNonLinearItems.isNotEmpty()
+                if (currentTabHasItems) {
                     item {
                         Spacer(modifier = Modifier.height(6.dp))
                         Box(
@@ -529,7 +637,7 @@ fun TaskDetailScreen(
                                 Text(text = "＋", color = colors.accent, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "新增巡查项目 (时段巡查 / 常规待办)",
+                                    text = if (selectedTab == 0) "新增时段巡查项目" else "新增常规待办项目",
                                     color = colors.accent,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
@@ -636,6 +744,7 @@ fun TaskDetailScreen(
         if (currentStationId != null) {
             CheckItemEditorModal(
                 initialItem = null,
+                defaultIsTimeLinear = (selectedTab == 0),
                 onDismiss = { isCreatingNewItem = false },
                 onSave = { title, isTimeLinear, timeStart, timeEnd ->
                     viewModel.createCheckItem(
@@ -749,6 +858,7 @@ private fun SectionHeader(
  * Individual CheckItem Card featuring bidirectional SwipeToCompleteBox, time pulse,
  * expandable sub-items with bidirectional swipe, and photo/exception/edit actions.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CheckItemCard(
     itemWithSubs: CheckItemWithSubItems,
@@ -759,6 +869,7 @@ private fun CheckItemCard(
     onAddSubItem: (title: String) -> Unit,
     onDeleteSubItem: (subItemId: Long) -> Unit,
     onOpenEvidence: () -> Unit,
+    onDirectCamera: () -> Unit,
     onEditItem: () -> Unit,
     onDeleteItem: () -> Unit,
     modifier: Modifier = Modifier
@@ -781,6 +892,7 @@ private fun CheckItemCard(
         threshold = 64.dp,
         dismissOnComplete = true,
         canSwipeWhenCompleted = true,
+        shape = RoundedCornerShape(14.dp),
         modifier = modifier
     ) { progress, isCompleted ->
         Column(
@@ -826,15 +938,26 @@ private fun CheckItemCard(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                // Photo & Exception Action Button
+                // Photo & Exception Action Button (Direct Camera on single tap if no photo, evidence sheet on long-click or if photo exists)
+                val hasPhotoOrException = !item.photoUri.isNullOrBlank() || item.isException
                 Box(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable(
+                        .combinedClickable(
                             interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onOpenEvidence() }
+                            indication = null,
+                            onClick = {
+                                if (hasPhotoOrException) {
+                                    onOpenEvidence()
+                                } else {
+                                    onDirectCamera()
+                                }
+                            },
+                            onLongClick = {
+                                onOpenEvidence()
+                            }
+                        )
                         .background(
                             if (item.isException) colors.error.copy(alpha = 0.15f)
                             else if (!item.photoUri.isNullOrBlank()) colors.accentContainer
@@ -1393,12 +1516,13 @@ private fun StationManagerBottomSheet(
 @Composable
 private fun CheckItemEditorModal(
     initialItem: CheckItem?,
+    defaultIsTimeLinear: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (title: String, isTimeLinear: Boolean, timeStart: String?, timeEnd: String?) -> Unit
 ) {
     val colors = LocalOxherdColors.current
     var title by remember { mutableStateOf(initialItem?.title ?: "") }
-    var isTimeLinear by remember { mutableStateOf(initialItem?.isTimeLinear ?: false) }
+    var isTimeLinear by remember { mutableStateOf(initialItem?.isTimeLinear ?: defaultIsTimeLinear) }
     var timeStart by remember { mutableStateOf(initialItem?.timeStart ?: "20:00") }
     var timeEnd by remember { mutableStateOf(initialItem?.timeEnd ?: "20:30") }
 

@@ -114,7 +114,13 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
                 motion_scale REAL NOT NULL DEFAULT 1.0,
                 default_handoff_url TEXT NOT NULL DEFAULT '',
                 default_handoff_app TEXT NOT NULL DEFAULT 'com.tencent.tim',
-                theme_mode TEXT DEFAULT 'SYSTEM'
+                theme_mode TEXT DEFAULT 'SYSTEM',
+                notify_enabled INTEGER NOT NULL DEFAULT 1,
+                notify_advance_minutes INTEGER NOT NULL DEFAULT 15,
+                notify_sound INTEGER NOT NULL DEFAULT 1,
+                notify_vibrate INTEGER NOT NULL DEFAULT 1,
+                notify_slot_start INTEGER NOT NULL DEFAULT 1,
+                auto_restore_on_boot INTEGER NOT NULL DEFAULT 1
             )
             """.trimIndent()
         )
@@ -128,12 +134,23 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS sub_items")
-        db.execSQL("DROP TABLE IF EXISTS check_items")
-        db.execSQL("DROP TABLE IF EXISTS task_stations")
-        db.execSQL("DROP TABLE IF EXISTS duty_tasks")
-        db.execSQL("DROP TABLE IF EXISTS user_settings")
-        onCreate(db)
+        if (oldVersion < 3) {
+            try {
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN notify_enabled INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN notify_advance_minutes INTEGER NOT NULL DEFAULT 15")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN notify_sound INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN notify_vibrate INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN notify_slot_start INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE user_settings ADD COLUMN auto_restore_on_boot INTEGER NOT NULL DEFAULT 1")
+            } catch (e: Exception) {
+                db.execSQL("DROP TABLE IF EXISTS sub_items")
+                db.execSQL("DROP TABLE IF EXISTS check_items")
+                db.execSQL("DROP TABLE IF EXISTS task_stations")
+                db.execSQL("DROP TABLE IF EXISTS duty_tasks")
+                db.execSQL("DROP TABLE IF EXISTS user_settings")
+                onCreate(db)
+            }
+        }
     }
 
     override fun onOpen(db: SQLiteDatabase) {
@@ -188,6 +205,12 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             put("default_handoff_url", "")
             put("default_handoff_app", "com.tencent.tim")
             put("theme_mode", "SYSTEM")
+            put("notify_enabled", 1)
+            put("notify_advance_minutes", 15)
+            put("notify_sound", 1)
+            put("notify_vibrate", 1)
+            put("notify_slot_start", 1)
+            put("auto_restore_on_boot", 1)
         }
         db.insertWithOnConflict("user_settings", null, settingsValues, SQLiteDatabase.CONFLICT_REPLACE)
     }
@@ -320,6 +343,19 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
     // --- Check Items Queries & Mutations ---
 
     suspend fun getItemsForStation(stationId: Long): List<CheckItem> = withContext(Dispatchers.IO) {
+        readableDatabase.rawQuery(
+            "SELECT * FROM check_items WHERE station_id = ? ORDER BY sort_order ASC, id ASC",
+            arrayOf(stationId.toString())
+        ).use { cursor ->
+            val list = mutableListOf<CheckItem>()
+            while (cursor.moveToNext()) {
+                list.add(cursorToCheckItem(cursor))
+            }
+            list
+        }
+    }
+
+    suspend fun getAllCheckItemsByStation(stationId: Long): List<CheckItem> = withContext(Dispatchers.IO) {
         readableDatabase.rawQuery(
             "SELECT * FROM check_items WHERE station_id = ? ORDER BY sort_order ASC, id ASC",
             arrayOf(stationId.toString())
@@ -549,6 +585,56 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             put("time_end", timeEnd?.trim())
         }
         writableDatabase.update("check_items", values, "id = ?", arrayOf(itemId.toString()))
+        notifyTableChanged("check_items")
+    }
+
+    suspend fun updateCheckItemTiming(
+        itemId: Long,
+        isTimeLinear: Boolean,
+        timeStart: String?,
+        timeEnd: String?
+    ) = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("is_time_linear", if (isTimeLinear) 1 else 0)
+            put("time_start", timeStart?.trim()?.ifBlank { null })
+            put("time_end", timeEnd?.trim()?.ifBlank { null })
+        }
+        writableDatabase.update("check_items", values, "id = ?", arrayOf(itemId.toString()))
+        notifyTableChanged("check_items")
+    }
+
+    suspend fun updateCheckItemSortOrder(itemId: Long, newOrder: Int) = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("sort_order", newOrder)
+        }
+        writableDatabase.update("check_items", values, "id = ?", arrayOf(itemId.toString()))
+        notifyTableChanged("check_items")
+    }
+
+    suspend fun swapCheckItemSortOrder(firstId: Long, secondId: Long) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            var order1: Int? = null
+            var order2: Int? = null
+            db.rawQuery("SELECT sort_order FROM check_items WHERE id = ?", arrayOf(firstId.toString())).use { c ->
+                if (c.moveToFirst()) order1 = c.getInt(0)
+            }
+            db.rawQuery("SELECT sort_order FROM check_items WHERE id = ?", arrayOf(secondId.toString())).use { c ->
+                if (c.moveToFirst()) order2 = c.getInt(0)
+            }
+            if (order1 != null && order2 != null) {
+                val finalOrder1 = if (order1 == order2) order2 + 1 else order2
+                val finalOrder2 = order1
+                val v1 = ContentValues().apply { put("sort_order", finalOrder1) }
+                val v2 = ContentValues().apply { put("sort_order", finalOrder2) }
+                db.update("check_items", v1, "id = ?", arrayOf(firstId.toString()))
+                db.update("check_items", v2, "id = ?", arrayOf(secondId.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
         notifyTableChanged("check_items")
     }
 
@@ -883,9 +969,110 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             put("default_handoff_url", settings.defaultHandoffUrl)
             put("default_handoff_app", settings.defaultHandoffApp)
             put("theme_mode", settings.themeMode)
+            put("notify_enabled", if (settings.notifyEnabled) 1 else 0)
+            put("notify_advance_minutes", settings.notifyAdvanceMinutes)
+            put("notify_sound", if (settings.notifySound) 1 else 0)
+            put("notify_vibrate", if (settings.notifyVibrate) 1 else 0)
+            put("notify_slot_start", if (settings.notifySlotStart) 1 else 0)
+            put("auto_restore_on_boot", if (settings.autoRestoreOnBoot) 1 else 0)
         }
         writableDatabase.insertWithOnConflict("user_settings", null, values, SQLiteDatabase.CONFLICT_REPLACE)
         notifyTableChanged("user_settings")
+    }
+
+    suspend fun importDutyConfig(
+        dutyTask: DutyTask,
+        stations: List<TaskStation>,
+        items: List<CheckItem>,
+        subItems: List<SubItem>
+    ) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            // 1. Delete existing duty data
+            db.delete("sub_items", null, null)
+            db.delete("check_items", null, null)
+            db.delete("task_stations", null, null)
+            db.delete("duty_tasks", null, null)
+
+            // 2. Insert new duty task
+            val taskValues = ContentValues().apply {
+                put("title", dutyTask.title)
+                put("scheduled_date", dutyTask.scheduledDate)
+                put("scheduled_time", dutyTask.scheduledTime)
+                put("recurrence_rule", dutyTask.recurrenceRule)
+                put("remind_advance_minutes", dutyTask.remindAdvanceMinutes)
+                put("handoff_url", dutyTask.handoffUrl)
+                put("handoff_target_app", dutyTask.handoffTargetApp)
+                put("status", dutyTask.status)
+                put("archive_zip_path", dutyTask.archiveZipPath)
+                put("completed_at", dutyTask.completedAt)
+                put("created_at", if (dutyTask.createdAt > 0) dutyTask.createdAt else System.currentTimeMillis())
+            }
+            val newTaskId = db.insert("duty_tasks", null, taskValues)
+
+            // 3. Insert stations with mapping old id -> new id
+            val stationIdMap = mutableMapOf<Long, Long>()
+            for (st in stations) {
+                val sValues = ContentValues().apply {
+                    put("task_id", newTaskId)
+                    put("name", st.name)
+                    put("sort_order", st.sortOrder)
+                    put("is_completed", if (st.isCompleted) 1 else 0)
+                }
+                val newStationId = db.insert("task_stations", null, sValues)
+                stationIdMap[st.id] = newStationId
+            }
+
+            // 4. Insert items with mapping old id -> new id
+            val itemIdMap = mutableMapOf<Long, Long>()
+            for (item in items) {
+                val targetStationId = stationIdMap[item.stationId] ?: stationIdMap.values.firstOrNull() ?: continue
+                val iValues = ContentValues().apply {
+                    put("station_id", targetStationId)
+                    put("title", item.title)
+                    put("is_time_linear", if (item.isTimeLinear) 1 else 0)
+                    put("time_start", item.timeStart)
+                    put("time_end", item.timeEnd)
+                    put("is_completed", if (item.isCompleted) 1 else 0)
+                    put("is_exception", if (item.isException) 1 else 0)
+                    put("photo_uri", item.photoUri)
+                    put("note", item.note)
+                    put("completed_at", item.completedAt)
+                    put("sort_order", item.sortOrder)
+                }
+                val newItemId = db.insert("check_items", null, iValues)
+                itemIdMap[item.id] = newItemId
+            }
+
+            // 5. Insert sub items
+            for (sub in subItems) {
+                val targetItemId = itemIdMap[sub.parentId] ?: continue
+                val subValues = ContentValues().apply {
+                    put("parent_id", targetItemId)
+                    put("title", sub.title)
+                    put("is_completed", if (sub.isCompleted) 1 else 0)
+                    put("sort_order", sub.sortOrder)
+                }
+                db.insert("sub_items", null, subValues)
+            }
+
+            // 6. Update user_settings active station
+            val firstStation = stations.firstOrNull()
+            if (firstStation != null) {
+                val newActiveStationId = stationIdMap[firstStation.id] ?: 1L
+                val setVals = ContentValues().apply {
+                    put("active_station_id", newActiveStationId)
+                    put("active_station_name", firstStation.name)
+                }
+                db.update("user_settings", setVals, "id = 1", null)
+            }
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        notifyTableChanged("*")
     }
 
     suspend fun updateThemeMode(themeMode: String) = withContext(Dispatchers.IO) {
@@ -1071,6 +1258,13 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
         } else {
             ThemeMode.SYSTEM
         }
+        val notifyEnabled = cursor.getIntOrNull("notify_enabled")?.let { it == 1 } ?: true
+        val notifyAdvanceMinutes = cursor.getIntOrNull("notify_advance_minutes") ?: 15
+        val notifySound = cursor.getIntOrNull("notify_sound")?.let { it == 1 } ?: true
+        val notifyVibrate = cursor.getIntOrNull("notify_vibrate")?.let { it == 1 } ?: true
+        val notifySlotStart = cursor.getIntOrNull("notify_slot_start")?.let { it == 1 } ?: true
+        val autoRestoreOnBoot = cursor.getIntOrNull("auto_restore_on_boot")?.let { it == 1 } ?: true
+
         return UserSettings(
             activeStationId = cursor.getLong(cursor.getColumnIndexOrThrow("active_station_id")),
             activeStationName = cursor.getString(cursor.getColumnIndexOrThrow("active_station_name")),
@@ -1078,8 +1272,19 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
             motionScale = cursor.getFloat(cursor.getColumnIndexOrThrow("motion_scale")),
             defaultHandoffUrl = cursor.getString(cursor.getColumnIndexOrThrow("default_handoff_url")),
             defaultHandoffApp = cursor.getString(cursor.getColumnIndexOrThrow("default_handoff_app")),
-            themeMode = themeMode
+            themeMode = themeMode,
+            notifyEnabled = notifyEnabled,
+            notifyAdvanceMinutes = notifyAdvanceMinutes,
+            notifySound = notifySound,
+            notifyVibrate = notifyVibrate,
+            notifySlotStart = notifySlotStart,
+            autoRestoreOnBoot = autoRestoreOnBoot
         )
+    }
+
+    private fun Cursor.getIntOrNull(columnName: String): Int? {
+        val index = getColumnIndex(columnName)
+        return if (index == -1 || isNull(index)) null else getInt(index)
     }
 
     private fun Cursor.getStringOrNull(columnName: String): String? {
@@ -1094,7 +1299,7 @@ class OxherdDatabase private constructor(context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "oxherd.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 3
 
         @Volatile
         private var instance: OxherdDatabase? = null
