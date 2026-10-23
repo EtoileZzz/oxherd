@@ -1,0 +1,90 @@
+package com.oxherd.app.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.LocalDate
+
+class DutyDataTest {
+
+    @Test
+    fun testDutyTaskCreation() {
+        val task = DutyTask(
+            id = 1L,
+            title = "周四图书馆晚班巡检",
+            scheduledDate = "2026-10-23",
+            scheduledTime = "20:00",
+            recurrenceRule = "WEEKLY:4",
+            remindAdvanceMinutes = 15,
+            handoffTargetApp = "com.tencent.tim",
+            status = TaskStatus.NOT_STARTED
+        )
+
+        assertEquals("周四图书馆晚班巡检", task.title)
+        assertEquals("2026-10-23", task.scheduledDate)
+        assertEquals("20:00", task.scheduledTime)
+        assertEquals("WEEKLY:4", task.recurrenceRule)
+        assertEquals(15, task.remindAdvanceMinutes)
+        assertEquals(TaskStatus.NOT_STARTED, task.status)
+        assertFalse(task.status == TaskStatus.COMPLETED)
+    }
+
+    @Test
+    fun testCheckItemAndSubItems() {
+        val checkItem = CheckItem(
+            id = 10L,
+            stationId = 1L,
+            title = "20:00~20:30 开馆巡查与照明确认",
+            isTimeLinear = true,
+            timeStart = "20:00",
+            timeEnd = "20:30"
+        )
+        val sub1 = SubItem(id = 101L, parentId = 10L, title = "检查大厅主灯开闭", isCompleted = true)
+        val sub2 = SubItem(id = 102L, parentId = 10L, title = "确认301-315自习室电源插座通电", isCompleted = false)
+
+        val itemWithSubs = CheckItemWithSubItems(
+            item = checkItem,
+            subItems = listOf(sub1, sub2)
+        )
+
+        assertTrue(itemWithSubs.item.isTimeLinear)
+        assertEquals(2, itemWithSubs.subItems.size)
+        assertTrue(itemWithSubs.subItems[0].isCompleted)
+        assertFalse(itemWithSubs.subItems[1].isCompleted)
+    }
+
+    @Test
+    fun testStationWithItemsHierarchy() {
+        val station = TaskStation(
+            id = 1L,
+            taskId = 100L,
+            name = "3楼自习区",
+            sortOrder = 1,
+            isCompleted = false
+        )
+        val stationWithItems = StationWithItems(station = station, items = emptyList())
+
+        assertEquals("3楼自习区", stationWithItems.station.name)
+        assertEquals(1, stationWithItems.station.sortOrder)
+        assertFalse(stationWithItems.station.isCompleted)
+    }
+
+    @Test
+    fun testUserSettingsDefaults() {
+        val settings = UserSettings()
+        assertEquals(1L, settings.activeStationId)
+        assertEquals("3楼自习区", settings.activeStationName)
+        assertEquals(PerfLevel.FULL, settings.perfLevel)
+        assertEquals(1.0f, settings.motionScale, 0.001f)
+        assertEquals("com.tencent.tim", settings.defaultHandoffApp)
+    }
+
+    @Test
+    fun testRecurrenceNextDateCalculation() {
+        val baseDate = LocalDate.of(2026, 10, 22) // Thursday
+        val nextDate = baseDate.plusWeeks(1)
+        assertEquals(LocalDate.of(2026, 10, 29), nextDate)
+    }
+}
